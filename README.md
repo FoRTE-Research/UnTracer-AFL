@@ -56,7 +56,9 @@ untracer-afl -i [/path/to/seed/dir] -o [/path/to/out/dir] [optional_args] -- [/p
 ```
 
 ### Status Screen
+<p align="center">
 <img src="http://people.cs.vt.edu/snagy2/img/untracer-afl.png" width="700">
+</p>
 
 * `calib execs` and `trim execs` - Number of testcase calibration and trimming executions, respectively. Tracing is done for both.
 * `block coverage` - Percentage of total blocks found (left) and the number of total blocks (right).
