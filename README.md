@@ -1,11 +1,22 @@
-# UnTracer-AFL
-This repository contains an implementation of our prototype coverage-guided tracing framework UnTracer (as presented in our paper *[Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing](https://arxiv.org/abs/1812.11875)*) in the popular coverage-guided fuzzer [AFL](http://lcamtuf.coredump.cx/afl). 
 
-Coverage-guided tracing employs two versions of the target binary -- (1) a forkserver-only `oracle` modified with basic block-level software interrupts for quickly identifying coverage-increasing testcases; and (2) a fully-instrumented `tracer` for tracing the coverage of all coverage-increasing testcases. In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver execution model](http://lcamtuf.blogspot.com/2014/10/fuzzing-binaries-without-execve.html). We also rely on [Dyninst](http://www.dyninst.org/) for instrumentation and static analysis operations.
+|             |                |
+|-------------|----------------|
+|**AUTHOR:**  | Stefan Nagy  |
+|**EMAIL:**   | snagy2@vt.edu |
+
+# UnTracer-AFL
+
+This repository contains an implementation of our prototype coverage-guided tracing framework UnTracer (as presented in our paper *[Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing](https://arxiv.org/abs/1812.11875)*) in the popular coverage-guided fuzzer [AFL](http://lcamtuf.coredump.cx/afl). Coverage-guided tracing employs two versions of the target binary -- (1) a forkserver-only `oracle` modified with basic block-level software interrupts for quickly identifying coverage-increasing testcases; and (2) a fully-instrumented `tracer` for tracing the coverage of all coverage-increasing testcases. In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver execution model](http://lcamtuf.blogspot.com/2014/10/fuzzing-binaries-without-execve.html). We also rely on [Dyninst](http://www.dyninst.org/) for tracer instrumentation and static analysis operations.
 
 **DISCLAIMER:** This software is strictly a research prototype.
 
-## Getting Started
+### Oracle and tracer instrumentation:
+As detailed in our paper, the `oracle` binary's only instrumented code is a forkserver. For performance reasons, this prototype requires all target binaries be compiled with `untracer-cc` -- our "forkserver-only" modification of AFL's assembly-time instrumenter `afl-cc`. We plan to incorporate a purely "black-box" (source-unavailable) oracle instrumentation approach in the near future. For `tracer` binary instrumentation we utilize Dyninst with much of our code based off of [AFL-Dyninst](https://github.com/vanhauser-thc/afl-dyninst)'s code.
+
+### Coverage
+Our current implementation of UnTracer supports basic block coverage. 
+
+## Installation
 #### 1. Build Dyninst
 ```
 sudo apt-get install cmake m4 zlib1g-dev libboost-all-dev libiberty-dev
@@ -41,9 +52,18 @@ make clean && make all
 ```
 
 ## Running UnTracer-AFL
-First, compile all binaries using [FoRTE-afl-cc's forkserver-only ("baseline")](https://github.com/FoRTE-Research/afl#forte-afl-cc) mode. Note that only **non-position-independent** target binaries are supported, so compile all target binaries with CFLAG `-no-pie` (unnecessary for Clang).
+First, compile all target binaries in "forkserver-only" mode using `untracer-clang` or `untracer-gcc`. Note that only **non-position-independent** target binaries are supported, so compile all target binaries with CFLAG `-no-pie` (unnecessary for Clang).
 
 Then, run as follows:
 ```
-untracer-afl -i [/path/to/seed/dir] -o [/path/to/out/dir] -- [/path/to/target] [target_args]
+untracer-afl -i [/path/to/seed/dir] -o [/path/to/out/dir] [optional_args] -- [/path/to/target] [target_args]
 ```
+
+## Status Screen
+<img src="http://people.cs.vt.edu/snagy2/img/untracer-afl.png" width="650">
+
+* `calib execs` and `trim execs` - Number of testcase calibration and trimming executions, respectively. Tracing is done for both.
+* `block coverage` - Percentage of total blocks found (left) and the number of total blocks (right).
+* `traced / queued` - Ratio of traced versus queued testcases. This ratio should (ideally) be 1:1 except for when trace timeouts occur.
+* `trace tmouts (discarded)` - Number of testcases which timed out during tracing. Like AFL, we do not queue these.
+* `no new bits (discarded)` - Number of testcases which were marked coverage-increasing by the oracle but did not actually increase coverage. This should (ideally) be 0.
