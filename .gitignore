@@ -53,11 +53,16 @@ ehthumbs.db
 Thumbs.db
 
 # AFL-specific binaries
+afl-as
+afl-clang
+afl-clang++
+afl-gcc
+afl-g++
+untracer-as
 untracer-clang
 untracer-clang++
 untracer-gcc
 untracer-g++
-untracer-as
 as
 afl-analyze
 afl-showmap
