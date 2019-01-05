@@ -1,14 +1,13 @@
 
-|             |                |
-|-------------|----------------|
-|**AUTHOR:**  | Stefan Nagy  |
-|**EMAIL:**   | snagy2@vt.edu |
-
 # UnTracer-AFL
 
 This repository contains an implementation of our prototype coverage-guided tracing framework UnTracer (as presented in our paper *[Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing](https://arxiv.org/abs/1812.11875)*) in the popular coverage-guided fuzzer [AFL](http://lcamtuf.coredump.cx/afl). Coverage-guided tracing employs two versions of the target binary -- (1) a forkserver-only `oracle` modified with basic block-level software interrupts for quickly identifying coverage-increasing testcases; and (2) a fully-instrumented `tracer` for tracing the coverage of all coverage-increasing testcases. In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver execution model](http://lcamtuf.blogspot.com/2014/10/fuzzing-binaries-without-execve.html). We also rely on [Dyninst](http://www.dyninst.org/) for tracer instrumentation and static analysis operations.
 
-**DISCLAIMER:** This software is strictly a research prototype.
+|             |                |
+|-------------|----------------|
+|**AUTHOR:**  | Stefan Nagy  |
+|**EMAIL:**   | snagy2@vt.edu |
+|**DISCLAIMER:**   | This software is strictly a research prototype. |
 
 ### Oracle and tracer instrumentation:
 As detailed in our paper, the `oracle` binary's only instrumented code is a forkserver. For performance reasons, this prototype requires all target binaries be compiled with `untracer-cc` -- our "forkserver-only" modification of AFL's assembly-time instrumenter `afl-cc`. We plan to incorporate a purely "black-box" (source-unavailable) oracle instrumentation approach in the near future. For `tracer` binary instrumentation we utilize Dyninst with much of our code based off of [AFL-Dyninst](https://github.com/vanhauser-thc/afl-dyninst)'s code.
