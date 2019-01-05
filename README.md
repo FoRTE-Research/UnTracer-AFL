@@ -11,7 +11,7 @@ In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver exe
 |**EMAIL:**   | snagy2@vt.edu |
 |**DISCLAIMER:**   | This software is strictly a research prototype. |
 
-## Installation
+## INSTALLATION
 #### 1. Build Dyninst
 ```
 sudo apt-get install cmake m4 zlib1g-dev libboost-all-dev libiberty-dev
@@ -46,7 +46,7 @@ Then, run the following commands:
 make clean && make all
 ```
 
-## Running UnTracer-AFL
+## RUNNING UnTracer-AFL
 First, compile all target binaries in "forkserver-only" mode using `untracer-clang` or `untracer-gcc`. Note that only **non-position-independent** target binaries are supported, so compile all target binaries with CFLAG `-no-pie` (unnecessary for Clang).
 
 Then, run as follows:
@@ -54,7 +54,7 @@ Then, run as follows:
 untracer-afl -i [/path/to/seed/dir] -o [/path/to/out/dir] [optional_args] -- [/path/to/target] [target_args]
 ```
 
-## Status Screen
+## STATUS SCREEN
 <img src="http://people.cs.vt.edu/snagy2/img/untracer-afl.png" width="650">
 
 * `calib execs` and `trim execs` - Number of testcase calibration and trimming executions, respectively. Tracing is done for both.
