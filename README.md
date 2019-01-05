@@ -55,7 +55,7 @@ Then, run as follows:
 untracer-afl -i [/path/to/seed/dir] -o [/path/to/out/dir] [optional_args] -- [/path/to/target] [target_args]
 ```
 
-## STATUS SCREEN
+### Status Screen
 <img src="http://people.cs.vt.edu/snagy2/img/untracer-afl.png" width="700">
 
 * `calib execs` and `trim execs` - Number of testcase calibration and trimming executions, respectively. Tracing is done for both.
