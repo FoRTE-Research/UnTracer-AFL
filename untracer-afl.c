@@ -73,86 +73,35 @@
 
 // -------------- stefan ------------------------------------------------
 
-map_t trace_hashmap,                     /* Basic block hashmap data struct. */  
-      crash_hashmap;
-
-typedef struct hashmap_entry_struct
-{
-  char entry_key[256];
-} hashmap_entry;
-hashmap_entry* bb_hm_entry;
-
 #define FORKSRV_FD 198            /* Hardcoded forkserver FD's. Utilized in IPC. */
 #define SIGTRAP 5
 
 char ** target_argv;  
 char ** oracle_argv;
-char ** tracer_argv;
 char ** crash_oracle_argv;
+char ** tracer_argv;
 
-int covered_array[MAP_SIZE];
+int oracle_cov[MAP_SIZE];
+int crash_oracle_cov[MAP_SIZE];
 int block_array[MAP_SIZE];
-
-unsigned long time_start;
-unsigned long time_total;
-unsigned long time_oracle;
-
-unsigned long time_trap;
-unsigned long time_trap_trace;
-unsigned long time_trap_stopfsrv;
-unsigned long time_trap_unmodify;
-unsigned long time_trap_startfsrv;
-
-unsigned long time_calib;
-unsigned long time_calib_trace;
-
-unsigned long time_crash;
-unsigned long time_crash_oracle;
-unsigned long time_crash_trace;
-unsigned long time_crash_stopfsrv;
-unsigned long time_crash_unmodify;
-unsigned long time_crash_startfsrv;
-
-unsigned long time_trim;
-unsigned long time_trim_trace;
-
 
 EXP_ST u32 blocks_total = 0,
            blocks_seen = 0,
            crash_blocks = 0,
-
            total_traced = 0,
            total_queued = 0,
            trace_tmouts = 0,
            trace_nobits = 0,
-           trace_noblks = 0,
-
            calib_execs = 0;
 
-           /*
-           queued_with_blks = 0,
-           queued_wo_blks = 0,
-           queued_with_tmout = 0, 
-           queued_with_tmout_wo_blks = 0*/
-
-
-EXP_ST u64 //exec_start,                 
-           //exec_stop, 
-           //run_start, 
-           //run_stop,
-           target_size;
-
-//EXP_ST s32 save_time;
+EXP_ST u64 target_size;
 
 EXP_ST s32 oracle_fsrv_ctlFD,         /* Forkserver control pipes. */
            tracer_fsrv_ctlFD,
-           
            oracle_fsrv_stFD,          /* Forkserver status pipes. */
            tracer_fsrv_stFD,   
-           
            oracle_fsrv_PID,           /* Target forkserver PIDs. */
            tracer_fsrv_PID,
-           
            oracle_child_PID,          /* Target child PIDs. */
            tracer_child_PID,
            
@@ -160,8 +109,6 @@ EXP_ST s32 oracle_fsrv_ctlFD,         /* Forkserver control pipes. */
            crash_oracle_fsrv_stFD,
            crash_oracle_fsrv_PID,
            crash_oracle_child_PID;
-
-//static FILE* execLogFile;   
 
 EXP_ST u8 *target_path,               /* Path to target binary            */
           *tracer_path, 
@@ -172,7 +119,6 @@ EXP_ST u8 *target_path,               /* Path to target binary            */
           *crash_oracle_path;
 
 // -------------- stefan ------------------------------------------------
-
 
 /* Lots of globals, but mostly for the status UI and other things where it
    really makes no sense to haul them around as function parameters. */
@@ -414,6 +360,298 @@ enum {
   /* 05 */ FAULT_NOBITS,
   /* 06 */ FAULT_TRAP // stefan
 };
+
+
+void execute(char * tmp[], char * pid_name, int print_output){
+
+  /* Helper function for running execve() with error checking
+   * and output-printing toggling. */
+
+  int pid_fork, status;
+
+  pid_fork = fork();
+  if (pid_fork < 0 ){
+    fprintf(stderr, "%s: %s\n", pid_name, strerror(errno));
+    exit(EXIT_FAILURE);
+  }
+  if (pid_fork == 0){
+    if (!print_output){
+      dup2(dev_null_fd, 1); 
+      dup2(dev_null_fd, 2); 
+    }
+    if (execvp(tmp[0], tmp) < 0)
+      fprintf(stderr, "%s: %s\n", pid_name, strerror(errno));
+    exit(0);
+  }
+  if (waitpid(pid_fork, &status, 0) <= 0){
+    fprintf(stderr, "%s: %s\n", pid_name, strerror(errno));
+    exit(EXIT_FAILURE);
+  }
+
+  return;
+}
+
+void copy_binary(char* src_path, char* dst_path){
+
+  /* Helper function to copy files. */
+
+  struct stat st = {0};
+  stat(src_path, &st);
+  char * data = malloc(st.st_size);
+
+  FILE * src_file = fopen(src_path, "rb");
+  FILE * dst_file = fopen(dst_path, "wb");
+
+  if (fread(data, 1, st.st_size, src_file) != st.st_size) {
+    perror("fread in copy_binary()");
+    exit(EXIT_FAILURE);
+  }
+
+  if(fwrite(data, 1, st.st_size, dst_file) != st.st_size) {
+    perror("fwrite in copy_binary()");
+    exit(EXIT_FAILURE);
+  }
+
+  fclose(src_file);
+  fclose(dst_file);
+
+  chmod(dst_path, 0777);
+  
+  return;
+}
+
+static void setup_args(int argc, char ** argv){
+
+  /* Set up relevant paths. */
+  trace_path = alloc_printf("%s/.cur_trace", out_dir);  
+  bb_lst_path = alloc_printf("%s/.bblist", out_dir);  
+
+  /* Set up relevant binary paths and arg arrays. */
+  target_argv = argv + optind;
+
+  oracle_argv = malloc((argc-optind+1) * sizeof(target_argv));
+  tracer_argv = malloc((argc-optind+1) * sizeof(target_argv));
+  crash_oracle_argv = malloc((argc-optind+1) * sizeof(target_argv));
+
+  oracle_path = alloc_printf("%s/%s.oracle", out_dir, basename(target_path));
+  tracer_path = alloc_printf("%s/%s.tracer", out_dir, basename(target_path));
+  dummy_path  = alloc_printf("%s/%s.dummy", out_dir, basename(target_path));
+  crash_oracle_path = alloc_printf("%s/%s.crash_oracle", out_dir, basename(target_path)); 
+
+  /* If present, replace "@@" with out_file. */
+  /* TODO - tcaseFD STDIN configuration. */
+  for(int i = 0; i<argc-optind; i++)
+  {
+    if (strcmp(target_argv[i], "@@") == 0)
+      target_argv[i] = out_file;
+    memcpy(&oracle_argv[i], &target_argv[i], sizeof(target_argv[0]));
+    memcpy(&tracer_argv[i], &target_argv[i], sizeof(target_argv[0]));  
+    memcpy(&crash_oracle_argv[i], &target_argv[i], sizeof(target_argv[0]));  
+  }
+
+  /* Set argument target copy paths and NULL terminators. */
+  oracle_argv[0] = oracle_path;
+  tracer_argv[0] = tracer_path;
+  crash_oracle_argv[0] = crash_oracle_path;
+  oracle_argv[argc-optind] = NULL;
+  tracer_argv[argc-optind] = NULL;
+  crash_oracle_argv[argc-optind] = NULL;
+
+  return;
+}
+
+void setup_oracle(u8 * path_to_oracle){
+
+  // stefan
+
+  //ACTF("Setting up oracle binary...");
+
+  u8* fname = alloc_printf("%s", path_to_oracle);
+  unlink(fname);
+  ck_free(fname);
+  
+  int target_fd;
+  char * target_data = malloc(target_size);
+
+  target_fd = open(target_path, O_RDONLY);
+  if (target_fd < 0) {
+    perror("open() target_fd");
+    exit(EXIT_FAILURE);
+  }
+
+  target_data = mmap(0, target_size, PROT_READ, MAP_PRIVATE, target_fd, 0);
+  if (target_data == MAP_FAILED){
+    perror("mmap() targetData");
+    exit(EXIT_FAILURE); 
+  }
+
+  /* Found afl-cc-instrumented forkserver (whitebox mode). */
+  if (memmem(target_data, target_size, "__afl_maybe_log", strlen("__afl_maybe_log") + 1))
+    copy_binary(target_path, path_to_oracle);    
+  
+  else {
+    printf("\n\t\tForkserver not found in target %s!\n", basename(target_path));
+    exit(EXIT_FAILURE);
+  }
+
+  return;
+}
+
+void setup_tracer(){
+
+  /* The primary concern is basic blocks that execute before the forkserver. 
+   * To eliminate these, we simply execute the instrumented tracer once and 
+   * prune the basic blocks which occur. */
+
+  u8* fname = alloc_printf("%s", tracer_path);
+  unlink(fname);
+  ck_free(fname);
+
+  fname = alloc_printf("%s", dummy_path);
+  unlink(fname);
+  ck_free(fname);
+
+  copy_binary(target_path, tracer_path);
+
+  char nop[1] = {0x90};
+  char * data = malloc(target_size);
+  long int offset;
+
+  /* NOP target forkserver callback since we don't want conlifcts with Dyninst's forkserver. */
+  /* Find the starting offset - where the three consecutive nops lie. */
+  FILE * tracer_file = fopen(tracer_path, "r+");
+  if (fread(data, 1, target_size, tracer_file) != target_size){
+    perror("fread in setup_tracer()");
+    exit(EXIT_FAILURE);    
+  }
+
+  offset = (char *) memmem(data, target_size, "\x90\x90\x90", strlen("\x90\x90\x90"+1)) - data;
+
+  /* Replace the first 5 bytes after the nop. */
+  for (int i=0; i<9; i++){
+    fseek(tracer_file, offset+3+i, SEEK_SET);
+    fwrite(nop, 1, 1, tracer_file);
+  }
+  fclose(tracer_file); 
+  
+  char * dyninst_args_dummy[] = {"UnTracerDyninst", tracer_path, "-O", dummy_path, "-M", "2", "-T", trace_path, "-E", NULL};
+  execute(dyninst_args_dummy, "UnTracerDyninst", 1);
+
+  char * dummy_args[] = {dummy_path, NULL};
+  execute(dummy_args, dummy_path, 0);
+  
+  char * dyninst_args_tracer[] = {"UnTracerDyninst", tracer_path, "-O", tracer_path, "-M", "2", "-X", trace_path, "-I", bb_lst_path, NULL};
+  execute(dyninst_args_tracer, "UnTracerDyninst", 1);
+
+  return;
+}
+
+
+void setup_block_array(){
+
+  /* Reads a list of basic blocks from file and populates a new array. */
+
+  char tmp1[256];
+  char * tmp2;
+
+  FILE * bb_lst_file = fopen(bb_lst_path, "r");
+
+  while (fgets(tmp1, sizeof(tmp1), bb_lst_file)) {
+
+    strtok_r (tmp1, ", ", &tmp2);
+    
+    int addr = atoi(tmp1);
+    int id = atoi(tmp2);
+
+    block_array[id] = addr;
+
+    blocks_total++;
+  } 
+
+  fclose(bb_lst_file);
+
+  return;
+}
+
+void modify_oracle(u8 * path_to_oracle){
+
+  /* Modifies the start of every basic block in the oracle binary copy. 
+   * Only basic blocks recorded in the array are considered; 
+   * a previous step pruned basic blocks occurring before main() to 
+   * prevent forkserver failure. */
+
+  int addr;
+  char flag[1] = {0xCC};
+  int offset = 0;
+
+  /* Open both target oracle and bb list files. */
+  FILE * oracle_file = fopen(path_to_oracle, "r+");
+
+  for (int i=0; i<MAP_SIZE; i++){
+
+    addr = block_array[i] + offset;
+
+    if (addr != 0){
+
+      fseek(oracle_file, addr, SEEK_SET);
+      fseek(oracle_file, addr, SEEK_SET);
+      fwrite(flag, 1, 1, oracle_file);
+
+    }
+  }
+
+  fclose(oracle_file);
+
+  return;
+}
+
+int unmodify_oracle(u8 * path_to_oracle, int blocks_cov[]){ 
+
+  /* Resets every basic block in the oracle binary copy back to its original values. 
+   * To prevent redundant unmodifying of basic blocks, we remove each unmodified basic
+   * block from the global hashmap, and only consider basic blocks in the hashmap. */
+
+  int offset_target, offset_oracle;
+  char flag[1];
+  int offset = 0;
+  int count = 0;
+
+  /* Open both target, target oracle, and trace files. */
+  FILE * target_file = fopen(target_path, "r+");
+  FILE * oracle_file = fopen(path_to_oracle, "r+");
+
+  /* Iterate through bb list; insert the "CC" interrupt for every corresponding bb address in the target oracle. */
+  for (int i=0; i<MAP_SIZE; i++){
+
+    if (!trace_bits[i] || blocks_cov[i])
+      continue;
+
+    offset_target = block_array[i];   
+    offset_oracle = offset_target + offset;
+
+    /* Jump to the respective offs in both the target and the target oracle copy. */
+    fseek(target_file, offset_target, SEEK_SET);
+    fseek(oracle_file, offset_oracle, SEEK_SET);
+      
+    /* Read first two bytes of basic block from the target file, overwrite in the target oracle. */
+    if (fread(flag, 1, 1, target_file) != 1){
+      perror("fread() unmodify_oracle()");
+      exit(EXIT_FAILURE);   
+    }
+    if (fwrite(flag, 1, 1, oracle_file) != 1){
+      perror("fwrite() unmodify_oracle()");
+      exit(EXIT_FAILURE);
+    }
+
+    blocks_cov[i] = 1;
+    count++;
+  }  
+
+  fclose(target_file);
+  fclose(oracle_file);
+
+  return count;
+}
 
 /* Get unix time in milliseconds */
 
@@ -1109,79 +1347,6 @@ static u32 count_non_255_bytes(u8* mem) {
   return ret;
 
 }
-
-
-/* Destructively simplify trace by eliminating hit count information
-   and replacing it with 0x80 or 0x01 depending on whether the tuple
-   is hit or not. Called on every new crash or timeout, should be
-   reasonably fast. */
-
-static const u8 simplify_lookup[256] = { 
-
-  [0]         = 1,
-  [1 ... 255] = 128
-
-};
-
-#ifdef __x86_64__
-
-static void simplify_trace(u64* mem) {
-
-  u32 i = MAP_SIZE >> 3;
-
-  while (i--) {
-
-    /* Optimize for sparse bitmaps. */
-
-    if (unlikely(*mem)) {
-
-      u8* mem8 = (u8*)mem;
-
-      mem8[0] = simplify_lookup[mem8[0]];
-      mem8[1] = simplify_lookup[mem8[1]];
-      mem8[2] = simplify_lookup[mem8[2]];
-      mem8[3] = simplify_lookup[mem8[3]];
-      mem8[4] = simplify_lookup[mem8[4]];
-      mem8[5] = simplify_lookup[mem8[5]];
-      mem8[6] = simplify_lookup[mem8[6]];
-      mem8[7] = simplify_lookup[mem8[7]];
-
-    } else *mem = 0x0101010101010101ULL;
-
-    mem++;
-
-  }
-
-}
-
-#else
-
-static void simplify_trace(u32* mem) {
-
-  u32 i = MAP_SIZE >> 2;
-
-  while (i--) {
-
-    /* Optimize for sparse bitmaps. */
-
-    if (unlikely(*mem)) {
-
-      u8* mem8 = (u8*)mem;
-
-      mem8[0] = simplify_lookup[mem8[0]];
-      mem8[1] = simplify_lookup[mem8[1]];
-      mem8[2] = simplify_lookup[mem8[2]];
-      mem8[3] = simplify_lookup[mem8[3]];
-
-    } else *mem = 0x01010101;
-
-    mem++;
-  }
-
-}
-
-#endif /* ^__x86_64__ */
-
 
 /* Destructively classify execution counts in a trace. This is used as a
    preprocessing step for any newly acquired traces. Called on every exec,
@@ -2237,9 +2402,7 @@ static u8 calibrate_case(struct queue_entry* q, u8* use_mem, u32 handicap, u8 fr
 
     write_to_testcase(use_mem, q->len);
 
-    unsigned long time_calib_trace_tmp = get_cur_time_us();
     fault = run_target(&tracer_child_PID, &tracer_fsrv_ctlFD, &tracer_fsrv_stFD, use_tmout);
-    time_calib_trace += get_cur_time_us() - time_calib_trace_tmp;
 
     calib_execs++;
 
@@ -2391,9 +2554,8 @@ static void perform_dry_run() {
 
     close(fd);
 
-    unsigned long time_calib_tmp = get_cur_time_us();
     res = calibrate_case(q, use_mem, 0, 1); // stefan 
-    time_calib += get_cur_time_us() - time_calib_tmp;
+    blocks_seen += unmodify_oracle(oracle_path, oracle_cov);
 
     ck_free(use_mem);
 
@@ -2490,7 +2652,6 @@ static void perform_dry_run() {
           WARNF("No new instrumentation output, test case may be useless.");
 
         break;
-
     }
 
     if (q->var_behavior) WARNF("Instrumentation output varies across runs.");
@@ -2512,8 +2673,7 @@ static void perform_dry_run() {
     if (cal_failures * 5 > queued_paths)
       WARNF(cLRD "High percentage of rejected test cases, check settings!");
 
-  }
-
+  } 
   OKF("All test cases processed.");
 
 }
@@ -2732,61 +2892,6 @@ static void write_crash_readme(void) {
 }
 
 
-int unmodify_oracle(u8 * path_to_oracle, map_t hashmap){ 
-
-  /* Resets every basic block in the oracle binary copy back to its original values. 
-   * To prevent redundant unmodifying of basic blocks, we remove each unmodified basic
-   * block from the global hashmap, and only consider basic blocks in the hashmap. */
-
-  int offset_target, offset_oracle;
-  char flag[1];
-  int offset = 0;
-
-  int count = 0;
-
-  /* Open both target, target oracle, and trace files. */
-  FILE * target_file = fopen(target_path, "r+");
-  FILE * oracle_file = fopen(path_to_oracle, "r+");
-
-  /* Iterate through bb list; insert the "CC" interrupt for every corresponding bb address in the target oracle. */
-  for (int i=0; i<MAP_SIZE; i++){
-
-    if (!trace_bits[i])
-      continue;
-
-    if (covered_array[i])
-      continue;
-
-    offset_target = block_array[i];   
-
-    offset_oracle = offset_target + offset;
-
-    /* Jump to the respective offs in both the target and the target oracle copy. */
-    fseek(target_file, offset_target, SEEK_SET);
-    fseek(oracle_file, offset_oracle, SEEK_SET);
-      
-    /* Read first two bytes of basic block from the target file, overwrite in the target oracle. */
-    if (fread(flag, 1, 1, target_file) != 1){
-      perror("fread() unmodify_oracle()");
-      exit(EXIT_FAILURE);   
-    }
-    if (fwrite(flag, 1, 1, oracle_file) != 1){
-      perror("fwrite() unmodify_oracle()");
-      exit(EXIT_FAILURE);
-    }
-
-    covered_array[i] = 1;
-
-    count++;
-  }  
-
-  fclose(target_file);
-  fclose(oracle_file);
-
-  return count;
-}
-
-
 void stop_forkserver(int * fork_PID, int * fsrv_ctlFD, int * fsrv_stFD){
 
   /* Terminates either binary's forkserver. */
@@ -2928,49 +3033,28 @@ static u8 save_if_interesting(void* mem, u32 len, u8 fault) {
   u8  keeping = 0, res;
   u8  new_fault;
   u8  hnbits = 0;
-  unsigned long time_crash_tmp;
 
   if (fault == FAULT_TRAP){
 
-    unsigned long time_trap_tmp = get_cur_time_us();
-
-    unsigned long time_trap_trace_tmp = get_cur_time_us();
     new_fault = run_target(&tracer_child_PID, &tracer_fsrv_ctlFD, &tracer_fsrv_stFD, exec_tmout);
     total_traced++;
-    time_trap_trace += get_cur_time_us() - time_trap_trace_tmp;
 
     // Like AFL, we discard any inputs which timeout 
     if (!stop_soon && new_fault == FAULT_TMOUT) {
-
       trace_tmouts++;
-
-      time_trap += get_cur_time_us() - time_trap_tmp;
-
       goto keep_as_tmout;
     }
 
     // Let AFL decide; count, save, and discard inputs without new bitmap coverage
     if (!(hnbits = has_new_bits(virgin_bits))){
-
       trace_nobits++;
-
-      time_trap += get_cur_time_us() - time_trap_tmp;
-
       return keeping;
     }
     
     // Stop the oracle, modify it, and restart it; identify whether or not new blocks were reached.
-    unsigned long time_trap_stopfsrv_tmp = get_cur_time_us();
     stop_forkserver(&oracle_fsrv_PID, &oracle_fsrv_ctlFD, &oracle_fsrv_stFD);
-    time_trap_stopfsrv += get_cur_time_us() - time_trap_stopfsrv_tmp;
-
-    unsigned long time_trap_unmodify_tmp = get_cur_time_us();
-    blocks_seen += unmodify_oracle(oracle_path, trace_hashmap);
-    time_trap_unmodify += get_cur_time_us() - time_trap_unmodify_tmp;
-
-    unsigned long time_trap_startfsrv_tmp = get_cur_time_us();
+    blocks_seen += unmodify_oracle(oracle_path, oracle_cov);
     start_forkserver(&oracle_fsrv_PID, &oracle_fsrv_ctlFD, &oracle_fsrv_stFD, FORKSRV_FD, oracle_argv);
-    time_trap_startfsrv += get_cur_time_us() - time_trap_startfsrv_tmp;
 
     // Queue it up
     #ifndef SIMPLE_FILES
@@ -2978,18 +3062,18 @@ static u8 save_if_interesting(void* mem, u32 len, u8 fault) {
     #else
     fn = alloc_printf("%s/queue/id_%06u", out_dir, queued_paths);
     #endif /* ^!SIMPLE_FILES */
+    
     add_to_queue(fn, len, 0);
+    
     if (hnbits == 2) {
       queue_top->has_new_cov = 1;
       queued_with_bits++;
     }
+    
     queue_top->exec_cksum = hash32(trace_bits, MAP_SIZE, HASH_CONST);
 
     // Let AFL do its thing with calibration
-    unsigned long time_calib_tmp = get_cur_time_us();
     res = calibrate_case(queue_top, mem, queue_cycle - 1, 0);
-    time_calib += get_cur_time_us() - time_calib_tmp;
-
     if (res == FAULT_ERROR) FATAL("Unable to execute target application");
 
     fd = open(fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
@@ -3001,73 +3085,40 @@ static u8 save_if_interesting(void* mem, u32 len, u8 fault) {
 
     total_queued++;
 
-    time_trap += get_cur_time_us() - time_trap_tmp;
-
     // If we hit crash on tracing, we want it queued but also saved as a crash
     if (!stop_soon && new_fault == FAULT_CRASH) goto keep_as_crash;
   }
-
 
   switch (fault) {
     
     case FAULT_CRASH:
     keep_as_crash:
 
-      time_crash_tmp = get_cur_time_us();
-
       total_crashes++;
     
       if (unique_crashes >= KEEP_UNIQUE_CRASH) {
-
-        time_crash += get_cur_time_us() - time_crash_tmp;
-
         return keeping;
-
       }
 
-      unsigned long time_crash_oracle_tmp = get_cur_time_us();
       new_fault = run_target(&crash_oracle_child_PID, &crash_oracle_fsrv_ctlFD, &crash_oracle_fsrv_stFD, exec_tmout);
-      time_crash_oracle += get_cur_time_us() - time_crash_oracle_tmp;
 
       // If it doesn't hit a crash oracle interrupt, this means it isn't a unique crash
       if (new_fault != FAULT_TRAP) {
-
-        time_crash += get_cur_time_us() - time_crash_tmp;
-
         return keeping;
-      }
+      } 
 
       // If it hits an interrupt, trace, let AFL have the final say, then unmodify; else, discard 
-      unsigned long time_crash_trace_tmp = get_cur_time_us();
       run_target(&tracer_child_PID, &tracer_fsrv_ctlFD, &tracer_fsrv_stFD, exec_tmout);
-      time_crash_trace += get_cur_time_us() - time_crash_trace_tmp;
 
-      #ifdef __x86_64__
-      simplify_trace((u64*)trace_bits);
-      #else
-      simplify_trace((u32*)trace_bits);
-      #endif /* ^__x86_64__ */
-
-      if (!has_new_bits(virgin_crash)) {
-
-        time_crash += get_cur_time_us() - time_crash_tmp;
-
+      // Let AFL decide; count, save, and discard inputs without new bitmap coverage
+      if (!(hnbits = has_new_bits(virgin_crash))){
         return keeping;
       }
 
       // Stop the crash oracle, modify it, and restart it
-      unsigned long time_crash_stopfsrv_tmp = get_cur_time_us();
       stop_forkserver(&crash_oracle_fsrv_PID, &crash_oracle_fsrv_ctlFD, &crash_oracle_fsrv_stFD);
-      time_crash_stopfsrv += get_cur_time_us() - time_crash_stopfsrv_tmp;
-
-      unsigned long time_crash_unmodify_tmp = get_cur_time_us();
-      crash_blocks += unmodify_oracle(crash_oracle_path, crash_hashmap);
-      time_crash_stopfsrv += get_cur_time_us() - time_crash_unmodify_tmp;
-
-      unsigned long time_crash_startfsrv_tmp = get_cur_time_us();
+      crash_blocks += unmodify_oracle(crash_oracle_path, crash_oracle_cov);
       start_forkserver(&crash_oracle_fsrv_PID, &crash_oracle_fsrv_ctlFD, &crash_oracle_fsrv_stFD, FORKSRV_FD, crash_oracle_argv);  
-      time_crash_stopfsrv += get_cur_time_us() - time_crash_startfsrv_tmp;    
-
       if (!unique_crashes) write_crash_readme();
 
       #ifndef SIMPLE_FILES
@@ -3081,25 +3132,12 @@ static u8 save_if_interesting(void* mem, u32 len, u8 fault) {
       last_crash_time = get_cur_time();
       last_crash_execs = total_execs;
 
-      time_crash += get_cur_time_us() - time_crash_tmp;
-
       break;
-
 
     case FAULT_TMOUT:
     keep_as_tmout:   
-
       total_tmouts++;
-
-      // stefan - identifying unique tmouts/hangs requires tracing so bits are added to the trace bitmap
-      // Tracing all timeouts really slows us down (a similar problem happens in vanilla AFL's "dumb mode")
-      // It might be a good idea to let the user toggle tracing of unique tmouts/hangs if they want
-      if (!getenv("UNTRACER_HANG_TMOUT")) return keeping;
-
-      // TODO 
-
       return keeping;
-
       break;
 
     case FAULT_ERROR: 
@@ -3123,12 +3161,6 @@ static u8 save_if_interesting(void* mem, u32 len, u8 fault) {
   return keeping;
 
 }
-
-
-
-
-
-
 
 /* When resuming, try to find the queue position to start from. This makes sense
    only when resuming, and when we can find the original fuzzer_stats. */
@@ -3266,27 +3298,6 @@ static void write_stats_file(double bitmap_cvg, double stability, double eps) {
 
              "trace_tmouts              : %i\n"
              "trace_nobits              : %i\n"
-             "trace_noblks              : %i\n"
-
-             "time_oracle               : %0.02f%%\n"
-             "time_trap                 : %0.02f%%\n"
-             "time_trap_trace           : %0.02f%%\n"
-             "time_trap_stopfsrv        : %0.02f%%\n"
-             "time_trap_unmodify        : %0.02f%%\n"
-             "time_trap_startfsrv       : %0.02f%%\n"
-             "time_crash                : %0.02f%%\n"
-             "time_crash_oracle         : %0.02f%%\n"
-             "time_crash_trace          : %0.02f%%\n"
-             "time_crash_stopfsrv       : %0.02f%%\n"
-             "time_crash_unmodify       : %0.02f%%\n"
-             "time_crash_startfsrv      : %0.02f%%\n"
-             "time_calib_trace          : %0.02f%%\n"
-             "time_trim_trace           : %0.02f%%\n"
-
-             /*"queued_with_blks          : %i\n"
-             "queued_wo_blks            : %i\n"
-             "queued_with_tmout         : %i\n"
-             "queued_with_tmout_wo_blks : %i\n"*/
 
              "last_path                 : %llu\n"
              "last_crash                : %llu\n"
@@ -3330,42 +3341,6 @@ static void write_stats_file(double bitmap_cvg, double stability, double eps) {
 
              trace_tmouts,
              trace_nobits,
-             trace_noblks,
-
-             /*
-             time_oracle,
-             time_trap,
-             time_trap_trace,
-             time_trap_stopfsrv,
-             time_trap_unmodify,
-             time_trap_startfsrv,
-             time_crash,
-             time_crash_oracle,
-             time_crash_trace,
-             time_crash_stopfsrv,
-             time_crash_unmodify,
-             time_crash_startfsrv,
-             time_calib_trace,
-             time_trim_trace,
-             */
-             ((double)time_oracle * 100 / time_total),
-             ((double)time_trap * 100 / time_total),
-             ((double)time_trap_trace * 100 / time_total),
-             ((double)time_trap_stopfsrv * 100 / time_total),
-             ((double)time_trap_unmodify * 100 / time_total),
-             ((double)time_trap_startfsrv * 100 / time_total),
-             ((double)time_crash * 100 / time_total),
-             ((double)time_crash_oracle * 100 / time_total),
-             ((double)time_crash_trace * 100 / time_total),
-             ((double)time_crash_stopfsrv * 100 / time_total),
-             ((double)time_crash_unmodify * 100 / time_total),
-             ((double)time_crash_startfsrv * 100 / time_total),
-             ((double)time_calib_trace * 100 / time_total),
-             ((double)time_trim_trace * 100 / time_total),
-             /*queued_with_blks,
-             queued_wo_blks,
-             queued_with_tmout,
-             queued_with_tmout_wo_blks,*/
 
              last_path_time / 1000, 
              last_crash_time / 1000,
@@ -3416,7 +3391,7 @@ static void maybe_update_plot_file(double bitmap_cvg, double eps) {
      execs_per_sec */
 
   fprintf(plot_file, 
-          "%llu, %llu, %u, %u, %u, %u, %0.02f%%, %llu, %llu, %u, %0.02f, %llu, %u, %llu, %i, %i, %i, %i, %llu, %i, %i, %i, %0.02f%%, %0.02f%%, %0.02f%%, %0.02f%%, %0.02f%%, %0.02f%%, %0.02f%%, %0.02f%%, %0.02f%%, %0.02f%%, %0.02f%%, %0.02f%%, %0.02f%%, %0.02f%%\n",
+          "%llu, %llu, %u, %u, %u, %u, %0.02f%%, %llu, %llu, %u, %0.02f, %llu, %u, %llu, %i, %i, %i, %i, %llu, %i, %i\n",
           get_cur_time() / 1000, queue_cycle - 1, current_entry, queued_paths,
           pending_not_fuzzed, pending_favored, bitmap_cvg, unique_crashes,
           unique_hangs, max_depth, eps, 
@@ -3433,23 +3408,7 @@ static void maybe_update_plot_file(double bitmap_cvg, double eps) {
 
           total_tmouts,
           trace_tmouts,
-          trace_nobits,
-          trace_noblks,
-
-          ((double)time_oracle * 100 / time_total),
-          ((double)time_trap * 100 / time_total),
-          ((double)time_trap_trace * 100 / time_total),
-          ((double)time_trap_stopfsrv * 100 / time_total),
-          ((double)time_trap_unmodify * 100 / time_total),
-          ((double)time_trap_startfsrv * 100 / time_total),
-          ((double)time_crash * 100 / time_total),
-          ((double)time_crash_oracle * 100 / time_total),
-          ((double)time_crash_trace * 100 / time_total),
-          ((double)time_crash_stopfsrv * 100 / time_total),
-          ((double)time_crash_unmodify * 100 / time_total),
-          ((double)time_crash_startfsrv * 100 / time_total),
-          ((double)time_calib_trace * 100 / time_total),
-          ((double)time_trim_trace * 100 / time_total)
+          trace_nobits
           /*queued_with_blks,
           queued_wo_blks,
           queued_with_tmout,
@@ -3850,8 +3809,6 @@ static void check_term_size(void);
 
 static void show_stats(void) {
 
-  time_total = get_cur_time_us() - time_start;
-
   static u64 last_stats_ms, last_plot_ms, last_ms, last_execs;
   static double avg_exec;
   double t_byte_ratio, stab_ratio;
@@ -3972,10 +3929,10 @@ static void show_stats(void) {
   /* Let's start by drawing a centered banner. */
 
   banner_len = (crash_mode ? 24 : 22) + strlen(VERSION) + strlen(use_banner);
-  banner_pad = (80 - banner_len) / 2;
+  banner_pad = (70 - banner_len) / 2;
   memset(tmp, ' ', banner_pad);
 
-  sprintf(tmp + banner_pad, "%s " cLCY "| based on AFL-" VERSION " |" cLGN " (%s)",  cLBL "UnTracer-AFL (block cov)", use_banner);
+  sprintf(tmp + banner_pad, "%s " cLCY "| based on AFL-" VERSION " |" cLGN " (%s)",  cLBL "UnTracer-AFL", use_banner);
 
   SAYF("\n%s\n\n", tmp);
 
@@ -4129,7 +4086,7 @@ static void show_stats(void) {
 
   sprintf(tmp, "%s (%0.02f%%)", DI(queued_with_bits), ((double)queued_with_bits) * 100 / queued_paths);
 
-  SAYF("  new edges on  : " cRST "%-22s" bSTG bV "\n", tmp);
+  SAYF(" new blocks on  : " cRST "%-22s" bSTG bV "\n", tmp);
 
   sprintf(tmp, "%s (%s%s unique)", DI(total_crashes), DI(unique_crashes),
           (unique_crashes >= KEEP_UNIQUE_CRASH) ? "+" : "");
@@ -4175,7 +4132,7 @@ static void show_stats(void) {
 
 
   // stefan
-  SAYF(bVR cCYA bSTOP " additional stats " bSTG bH20 bH10 bH20 bH10 bVL "\n");
+  SAYF(bVR cCYA bSTOP " additional stats " bSTG bH10 bH5 bH2 bH2 bHT bH10 bH20 bH10 bVL "\n");
     
   sprintf(tmp, "%s (%0.02f%%)", DI(calib_execs), ((double)calib_execs) * 100 / total_execs);
   SAYF(bV bSTOP " calib execs : %s%-21s" bSTG, cRST, tmp);
@@ -4184,81 +4141,20 @@ static void show_stats(void) {
   SAYF(bSTOP "      trim execs  : " cRST "%-21s " bSTG bV "\n", tmp);
 
 
-  SAYF(bVR cCYA bSTOP " timing stats " bSTG bH20 bH2 bH2 bH10 bH20 bH10 bVL "\n");
-    
-  sprintf(tmp, "%0.02f%%", ((double)time_oracle) * 100 / time_total);
-  SAYF(bV bSTOP "         oracle : %s%-20s" bSTG, cRST, tmp);
-  sprintf(tmp, "%0.02f%%", ((double)time_crash) * 100 / time_total);
-  SAYF(bSTOP "           crash : " cRST "%-20s " bSTG bV "\n", tmp);
-
-  sprintf(tmp, "%0.02f%%", ((double)time_trap) * 100 / time_total);
-  SAYF(bV bSTOP "           trap : %s%-20s" bSTG, cRST, tmp);
-  sprintf(tmp, "%0.02f%%", ((double)time_crash_oracle) * 100 / time_total);
-  SAYF(bSTOP "    crash oracle : " cRST "%-20s " bSTG bV "\n", tmp);
-
-  sprintf(tmp, "%0.02f%%", ((double)time_trap_trace) * 100 / time_total);
-  SAYF(bV bSTOP "     trap trace : %s%-20s" bSTG, cRST, tmp);
-  sprintf(tmp, "%0.02f%%", ((double)time_crash_trace) * 100 / time_total);
-  SAYF(bSTOP "     crash trace : " cRST "%-20s " bSTG bV "\n", tmp);
-
-  sprintf(tmp, "%0.02f%%", ((double)time_trap_stopfsrv) * 100 / time_total);
-  SAYF(bV bSTOP "  trap stopfsrv : %s%-20s" bSTG, cRST, tmp);
-  sprintf(tmp, "%0.02f%%", ((double)time_crash_stopfsrv) * 100 / time_total);
-  SAYF(bSTOP "  crash stopfsrv : " cRST "%-20s " bSTG bV "\n", tmp);
-
-  sprintf(tmp, "%0.02f%%", ((double)time_trap_unmodify) * 100 / time_total);
-  SAYF(bV bSTOP "  trap unmodify : %s%-20s" bSTG, cRST, tmp);
-  sprintf(tmp, "%0.02f%%", ((double)time_crash_unmodify) * 100 / time_total);
-  SAYF(bSTOP "  crash unmodify : " cRST "%-20s " bSTG bV "\n", tmp);
-
-  sprintf(tmp, "%0.02f%%", ((double)time_trap_startfsrv) * 100 / time_total);
-  SAYF(bV bSTOP " trap startfsrv : %s%-20s" bSTG, cRST, tmp);
-  sprintf(tmp, "%0.02f%%", ((double)time_crash_startfsrv) * 100 / time_total);
-  SAYF(bSTOP " crash startfsrv : " cRST "%-20s " bSTG bV "\n", tmp);
-  /*
-  sprintf(tmp, "%0.02f%%", ((double)time_calib) * 100 / time_total);
-  SAYF(bV bSTOP "    calibration : %s%-20s" bSTG, cRST, tmp);
-  sprintf(tmp, "%0.02f%%", ((double)time_trim) * 100 / time_total);
-  SAYF(bSTOP "        trimming : " cRST "%-20s " bSTG bV "\n", tmp);
-  */
-  sprintf(tmp, "%0.02f%%", ((double)time_calib_trace) * 100 / time_total);
-  SAYF(bV bSTOP "    calib trace : %s%-20s" bSTG, cRST, tmp);
-  sprintf(tmp, "%0.02f%%", ((double)time_trim_trace) * 100 / time_total);
-  SAYF(bSTOP "      trim trace : " cRST "%-20s " bSTG bV "\n", tmp);
-
-
   SAYF(bVR bH cLBL bSTOP " UnTracer stats " bSTG bH10
        bH10 bH bH bSTOP cLBL " queueing info " bSTG bH20 bH2 bH2 bVL "\n");
 
-  //SAYF(bV bSTOP "\t\t\t\t      " bSTG bV);
-
   sprintf(tmp, "%0.02f%% / %i", ((float) blocks_seen * 100 / blocks_total), (int) blocks_total);
 
-  SAYF(bV bSTOP " block coverage : %s%-17s" bSTG, cRST, tmp);
+  SAYF(bV bSTOP "  block coverage : %s%-16s" bSTG, cRST, tmp);
 
   SAYF(bSTOP "  trace tmouts (discarded) : " cRST "%-13s " bSTG bV "\n", DI(trace_tmouts));
 
-  //SAYF(bSTOP "     with new blks : " cRST "%-17s " bSTG bV "\n", DI(queued_with_blks));
+  sprintf(tmp, "%s / %s", DI(total_traced), DI(total_queued));
 
-  SAYF(bV bSTOP "   total traced : " cRST "%-17s " bSTG, DI(total_traced));
+  SAYF(bV bSTOP " traced / queued : " cRST "%-17s " bSTG, tmp);
 
-  SAYF(bSTOP "  no new bits (discarded) : " cRST "%-13s " bSTG bV "\n", DI(trace_nobits));
-
-  //SAYF(bSTOP "     w/o new blks : " cRST "%-17s " bSTG bV "\n", DI(queued_wo_blks));
-
-  SAYF(bV bSTOP "   total queued : " cRST "%-17s " bSTG, DI(total_queued));
-
-  SAYF(bSTOP "   no new blocks (queued) : " cRST "%-13s " bSTG bV "\n", DI(trace_noblks));
-
-  //SAYF(bSTOP "       with tmout : " cRST "%-17s " bSTG bV "\n", DI(queued_with_tmout));
-
-  //SAYF(bV bSTOP "   trace tmouts : " cRST "%-21s " bSTG, DI(trace_tmouts));
-
-  //SAYF(bSTOP "w/tmout & w/o new blks : " cRST "%-17s " bSTG bV "\n", DI(queued_with_tmout_wo_blks));
-
-  //SAYF(bV bSTOP "\t\t\t\t      " bSTG bV);
-
-  //SAYF(bSTOP " queued & hnblks : " cRST "%-21s " bSTG bV "\n", DI(queued_with_blks));
+  SAYF(bSTOP " no new bits (discarded) : " cRST "%-13s " bSTG bV "\n", DI(trace_nobits));
 
   /* Aaaalmost there... hold on! */
 
@@ -4581,9 +4477,7 @@ static u8 trim_case(struct queue_entry* q, u8* in_buf) {
 
       write_with_gap(in_buf, q->len, remove_pos, trim_avail);
 
-      unsigned long time_trim_trace_tmp = get_cur_time_us();
       fault = run_target(&tracer_child_PID, &tracer_fsrv_ctlFD, &tracer_fsrv_stFD, exec_tmout);
-      time_trim_trace += get_cur_time_us() - time_trim_trace_tmp;
 
       trim_execs++;
 
@@ -4677,9 +4571,7 @@ EXP_ST u8 common_fuzz_stuff(u8* out_buf, u32 len) {
 
   write_to_testcase(out_buf, len);
 
-  unsigned long time_oracle_tmp = get_cur_time_us();
   fault = run_target(&oracle_child_PID, &oracle_fsrv_ctlFD, &oracle_fsrv_stFD, exec_tmout);
-  time_oracle += get_cur_time_us() - time_oracle_tmp;
 
   if (stop_soon) return 1;
 
@@ -5110,9 +5002,7 @@ static u8 fuzz_one() {
 
     if (queue_cur->cal_failed < CAL_CHANCES) {
 
-      unsigned long time_calib_tmp = get_cur_time_us();
       res = calibrate_case(queue_cur, in_buf, queue_cycle - 1, 0);
-      time_calib += get_cur_time_us() - time_calib_tmp;
 
       if (res == FAULT_ERROR)
         FATAL("Unable to execute target application");
@@ -5131,9 +5021,7 @@ static u8 fuzz_one() {
    ************/
   if (!dumb_mode && !queue_cur->trim_done) {
 
-    unsigned long time_trim_tmp = get_cur_time_us();
     u8 res = trim_case(queue_cur, in_buf);
-    time_trim += get_cur_time_us() - time_trim_tmp;
 
     if (res == FAULT_ERROR)
       FATAL("Unable to execute target application");
@@ -6803,9 +6691,7 @@ static void sync_fuzzers() {
 
         write_to_testcase(mem, st.st_size);
 
-        unsigned long time_oracle_tmp = get_cur_time_us();
         fault = run_target(&oracle_child_PID, &oracle_fsrv_ctlFD, &oracle_fsrv_stFD, exec_tmout);
-        time_oracle += get_cur_time_us() - time_oracle_tmp;
 
         if (stop_soon) return;
 
@@ -7181,15 +7067,8 @@ EXP_ST void setup_dirs_fds(void) {
                      "unique_hangs, max_depth, execs_per_sec, "
                      "execs_done, calib_execs, trim_execs, "
                      "blocks_seen, blocks_total, total_traced, total_queued, "
-                     "total_tmouts, trace_tmouts, trace_nobits, trace_noblks, "
-                     "time_oracle, "
-                     "time_trap, time_trap_trace, time_trap_stopfsrv, time_trap_unmodify, time_trap_startfsrv, "
-                     "time_crash, time_crash_oracle, time_crash_trace, time_crash_stopfsrv, time_crash_unmodify, time_crash_startfsrv, "
-                     "time_calib_trace, time_trim_trace "
-                     /*"queued_with_blks, queued_wo_blks, queued_with_tmout, queued_with_tmout_wo_blks"*/
+                     "total_tmouts, trace_tmouts, trace_nobits "
                      "\n");
-                     /* ignore errors */
-
 }
 
 
@@ -7591,273 +7470,6 @@ static void save_cmdline(u32 argc, char** argv) {
 #ifndef AFL_LIB
 
 
-void execute(char * tmp[], char * pid_name, int print_output){
-
-  /* Helper function for running execve() with error checking
-   * and output-printing toggling. */
-
-  int pid_fork, status;
-
-  pid_fork = fork();
-  if (pid_fork < 0 ){
-    fprintf(stderr, "%s: %s\n", pid_name, strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-  if (pid_fork == 0){
-    if (!print_output){
-      dup2(dev_null_fd, 1); 
-      dup2(dev_null_fd, 2); 
-    }
-    if (execvp(tmp[0], tmp) < 0)
-      fprintf(stderr, "%s: %s\n", pid_name, strerror(errno));
-    exit(0);
-  }
-  if (waitpid(pid_fork, &status, 0) <= 0){
-    fprintf(stderr, "%s: %s\n", pid_name, strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  return;
-}
-
-void copy_binary(char* src_path, char* dst_path){
-
-  /* Helper function to copy files. */
-
-  struct stat st = {0};
-  stat(src_path, &st);
-  char * data = malloc(st.st_size);
-
-  FILE * src_file = fopen(src_path, "rb");
-  FILE * dst_file = fopen(dst_path, "wb");
-
-  if (fread(data, 1, st.st_size, src_file) != st.st_size) {
-    perror("fread in copy_binary()");
-    exit(EXIT_FAILURE);
-  }
-
-  if(fwrite(data, 1, st.st_size, dst_file) != st.st_size) {
-    perror("fwrite in copy_binary()");
-    exit(EXIT_FAILURE);
-  }
-
-  fclose(src_file);
-  fclose(dst_file);
-
-  chmod(dst_path, 0777);
-  
-  return;
-}
-
-static void setup_args(int argc, char ** argv){
-
-  /* Set up relevant paths. */
-  trace_path = alloc_printf("%s/.cur_trace", out_dir);  
-  bb_lst_path = alloc_printf("%s/.bblist", out_dir);  
-
-  /* Set up relevant binary paths and arg arrays. */
-  target_argv = argv + optind;
-
-  oracle_argv = malloc((argc-optind+1) * sizeof(target_argv));
-  tracer_argv = malloc((argc-optind+1) * sizeof(target_argv));
-  crash_oracle_argv = malloc((argc-optind+1) * sizeof(target_argv));
-
-  oracle_path = alloc_printf("%s/%s.oracle", out_dir, basename(target_path));
-  tracer_path = alloc_printf("%s/%s.tracer", out_dir, basename(target_path));
-  dummy_path  = alloc_printf("%s/%s.dummy", out_dir, basename(target_path));
-  crash_oracle_path = alloc_printf("%s/%s.crash_oracle", out_dir, basename(target_path)); 
-
-  /* If present, replace "@@" with out_file. */
-  /* TODO - tcaseFD STDIN configuration. */
-  for(int i = 0; i<argc-optind; i++)
-  {
-    if (strcmp(target_argv[i], "@@") == 0)
-      target_argv[i] = out_file;
-    memcpy(&oracle_argv[i], &target_argv[i], sizeof(target_argv[0]));
-    memcpy(&tracer_argv[i], &target_argv[i], sizeof(target_argv[0]));  
-    memcpy(&crash_oracle_argv[i], &target_argv[i], sizeof(target_argv[0]));  
-  }
-
-  /* Set argument target copy paths and NULL terminators. */
-  oracle_argv[0] = oracle_path;
-  tracer_argv[0] = tracer_path;
-  crash_oracle_argv[0] = crash_oracle_path;
-  oracle_argv[argc-optind] = NULL;
-  tracer_argv[argc-optind] = NULL;
-  crash_oracle_argv[argc-optind] = NULL;
-
-  return;
-}
-
-void setup_oracle(u8 * path_to_oracle){
-
-  // stefan
-
-  //ACTF("Setting up oracle binary...");
-
-  u8* fname = alloc_printf("%s", path_to_oracle);
-  unlink(fname);
-  ck_free(fname);
-  
-  int target_fd;
-  char * target_data = malloc(target_size);
-
-  target_fd = open(target_path, O_RDONLY);
-  if (target_fd < 0) {
-    perror("open() target_fd");
-    exit(EXIT_FAILURE);
-  }
-
-  target_data = mmap(0, target_size, PROT_READ, MAP_PRIVATE, target_fd, 0);
-  if (target_data == MAP_FAILED){
-    perror("mmap() targetData");
-    exit(EXIT_FAILURE); 
-  }
-
-  /* Found afl-cc-instrumented forkserver (whitebox mode). */
-  if (memmem(target_data, target_size, "__afl_maybe_log", strlen("__afl_maybe_log") + 1))
-    copy_binary(target_path, path_to_oracle);    
-  
-  else {
-    printf("\n\t\tForkserver not found in target %s!\n", basename(target_path));
-    exit(EXIT_FAILURE);
-  }
-
-  return;
-}
-
-void setup_tracer(){
-
-  /* The primary concern is basic blocks that execute before the forkserver. 
-   * To eliminate these, we simply execute the instrumented tracer once and 
-   * prune the basic blocks which occur. */
-
-  u8* fname = alloc_printf("%s", tracer_path);
-  unlink(fname);
-  ck_free(fname);
-
-  fname = alloc_printf("%s", dummy_path);
-  unlink(fname);
-  ck_free(fname);
-
-  copy_binary(target_path, tracer_path);
-
-  char nop[1] = {0x90};
-  char * data = malloc(target_size);
-  long int offset;
-
-  /* NOP target forkserver callback since we don't want conlifcts with Dyninst's forkserver. */
-  /* Find the starting offset - where the three consecutive nops lie. */
-  FILE * tracer_file = fopen(tracer_path, "r+");
-  if (fread(data, 1, target_size, tracer_file) != target_size){
-    perror("fread in setup_tracer()");
-    exit(EXIT_FAILURE);    
-  }
-
-  offset = (char *) memmem(data, target_size, "\x90\x90\x90", strlen("\x90\x90\x90"+1)) - data;
-
-  /* Replace the first 5 bytes after the nop. */
-  for (int i=0; i<9; i++){
-    fseek(tracer_file, offset+3+i, SEEK_SET);
-    fwrite(nop, 1, 1, tracer_file);
-  }
-  fclose(tracer_file); 
-  
-  char * dyninst_args_dummy[] = {"UnTracerDyninst", tracer_path, "-O", dummy_path, "-M", "2", "-T", trace_path, "-E", NULL};
-  execute(dyninst_args_dummy, "UnTracerDyninst", 1);
-
-  char * dummy_args[] = {dummy_path, NULL};
-  execute(dummy_args, dummy_path, 0);
-  
-  char * dyninst_args_tracer[] = {"UnTracerDyninst", tracer_path, "-O", tracer_path, "-M", "2", "-X", trace_path, "-I", bb_lst_path, NULL};
-  execute(dyninst_args_tracer, "UnTracerDyninst", 1);
-
-  return;
-}
-
-
-void setup_hashmap(){
-
-  /* Reads a list of basic blocks from file and populates a new hashmap. */
-
-  char tmp1[256];
-  char * tmp2;
-
-  trace_hashmap = hashmap_new();
-  crash_hashmap = hashmap_new();
-  FILE * bb_lst_file = fopen(bb_lst_path, "r");
-
-  while (fgets(tmp1, sizeof(tmp1), bb_lst_file)) {
-
-    strtok_r (tmp1, ", ", &tmp2);
- 
-    //printf("%s:%s\n", tmp2, tmp1);
-   
-    int addr = atoi(tmp1);
-    int id = atoi(tmp2);
-
-    block_array[id] = addr;
-
-    blocks_total++;
-
-    //printf("%i:%i\n", id, addr);
-
-    /*
-    bb_hm_entry = malloc(sizeof(bb_hm_entry));
-    snprintf(bb_hm_entry->entry_key, sizeof(line-1), "%s", line); // stefan*/
-
-    /* If a hashmap_put() call failed, report and terminate. *//*
-    if (hashmap_put(trace_hashmap, bb_hm_entry->entry_key, bb_hm_entry) != MAP_OK){
-      perror("hashmap_put()");
-      exit(EXIT_FAILURE);
-    }
-    if (hashmap_put(crash_hashmap, bb_hm_entry->entry_key, bb_hm_entry) != MAP_OK){
-      perror("hashmap_put()");
-      exit(EXIT_FAILURE);
-    }*/
-
-
-
-  } 
-
-  fclose(bb_lst_file);
-
-  return;
-}
-
-void modify_oracle(u8 * path_to_oracle){
-
-  /* Modifies the start of every basic block in the oracle binary copy. 
-   * Only basic blocks recorded in the hashmap are considered; 
-   * a previous step pruned basic blocks occurring before main() to 
-   * prevent forkserver failure. */
-
-  int addr;
-  char flag[1] = {0xCC};
-  int offset = 0;
-
-  /* Open both target oracle and bb list files. */
-  FILE * oracle_file = fopen(path_to_oracle, "r+");
-
-  for (int i=0; i<MAP_SIZE; i++){
-
-    addr = block_array[i] + offset;
-
-    if (addr != 0){
-
-      fseek(oracle_file, addr, SEEK_SET);
-      fseek(oracle_file, addr, SEEK_SET);
-      fwrite(flag, 1, 1, oracle_file);
-
-    }
-  }
-
-  fclose(oracle_file);
-
-  return;
-}
-
-
 /* Main entry point */
 
 int main(int argc, char** argv) {
@@ -7871,7 +7483,7 @@ int main(int argc, char** argv) {
   struct timeval tv;
   struct timezone tz;
 
-  SAYF(cCYA "UnTracer-AFL " cRST "| FoRTE-Research Virginia Tech | based on AFL by <lcamtuf@google.com>\n");
+  SAYF(cCYA "UnTracer-AFL " cRST "| FoRTE-Research@Virginia Tech | based on AFL by <lcamtuf@google.com>\n");
 
   doc_path = access(DOC_PATH, F_OK) ? "docs" : DOC_PATH;
 
@@ -8018,9 +7630,6 @@ int main(int argc, char** argv) {
 
   setup_args(argc, argv); // stefan
 
-
-
-
   ACTF("Setting up oracle binaries...");
   setup_oracle(oracle_path); // stefan
   setup_oracle(crash_oracle_path);
@@ -8028,25 +7637,17 @@ int main(int argc, char** argv) {
   ACTF("Setting up tracer binary...");
   setup_tracer();
 
-
-
-  ACTF("Setting up basic block hashmaps...");
-  setup_hashmap(); // stefan
-
-
-
+  ACTF("Setting up basic block array...");
+  setup_block_array(); // stefan
 
   ACTF("Modifying oracle binaries...");
   modify_oracle(oracle_path); // stefan 
   modify_oracle(crash_oracle_path);
 
-
-
-
-
-
   ACTF("Starting tracer forkserver...");
   start_forkserver(&tracer_fsrv_PID, &tracer_fsrv_ctlFD, &tracer_fsrv_stFD, FORKSRV_FD, tracer_argv); // stefan
+
+  perform_dry_run(); // stefan
 
   ACTF("Starting oracle forkserver...");
   start_forkserver(&oracle_fsrv_PID, &oracle_fsrv_ctlFD, &oracle_fsrv_stFD, FORKSRV_FD, oracle_argv); // stefan
@@ -8055,10 +7656,6 @@ int main(int argc, char** argv) {
   start_forkserver(&crash_oracle_fsrv_PID, &crash_oracle_fsrv_ctlFD, &crash_oracle_fsrv_stFD, FORKSRV_FD, crash_oracle_argv); 
 
   start_time = get_cur_time();
-
-  time_start = get_cur_time_us();
-
-  perform_dry_run(); // stefan
 
   cull_queue();
 
