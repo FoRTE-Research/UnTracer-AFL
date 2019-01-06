@@ -14,7 +14,7 @@ In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver exe
 
 
 ## INSTALLATION
-#### 1. Build Dyninst
+#### 1. Download and Build Dyninst (we recommend v9.3.2)
 ```
 sudo apt-get install cmake m4 zlib1g-dev libboost-all-dev libiberty-dev
 wget https://github.com/dyninst/dyninst/archive/v9.3.2.tar.gz
