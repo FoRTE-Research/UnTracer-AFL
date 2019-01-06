@@ -9,6 +9,7 @@ In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver exe
 |-------------|----------------|
 |**AUTHOR:**  | Stefan Nagy  |
 |**EMAIL:**   | snagy2@vt.edu |
+|**LICENSE:** | [MIT License](LICENSE) |
 |**DISCLAIMER:**   | This software is strictly a research prototype. |
 
 
