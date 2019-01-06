@@ -63,6 +63,6 @@ untracer-afl -i [/path/to/seed/dir] -o [/path/to/out/dir] [optional_args] -- [/p
 
 * `calib execs` and `trim execs` - Number of testcase calibration and trimming executions, respectively. Tracing is done for both.
 * `block coverage` - Percentage of total blocks found (left) and the number of total blocks (right).
-* `traced / queued` - Ratio of traced versus queued testcases. This ratio should (ideally) be 1:1 except for when trace timeouts occur.
+* `traced / queued` - Ratio of traced versus queued testcases. This ratio should (ideally) be 1:1 but will increase as trace timeouts occur.
 * `trace tmouts (discarded)` - Number of testcases which timed out during tracing. Like AFL, we do not queue these.
 * `no new bits (discarded)` - Number of testcases which were marked coverage-increasing by the oracle but did not actually increase coverage. This should (ideally) be 0.
