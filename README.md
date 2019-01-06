@@ -49,7 +49,7 @@ make clean && make all
 ```
 
 ## USAGE
-First, compile all target binaries in "forkserver-only" mode using `untracer-clang` or `untracer-gcc`. Note that only **non-position-independent** target binaries are supported, so compile all target binaries with CFLAG `-no-pie` (unnecessary for Clang).
+First, compile all target binaries in "forkserver-only" mode using `untracer-clang/clang++` or `untracer-gcc/g++`. Note that only **non-position-independent** target binaries are supported, so compile all target binaries with CFLAG `-no-pie` (unnecessary for Clang).
 
 Then, run as follows:
 ```
