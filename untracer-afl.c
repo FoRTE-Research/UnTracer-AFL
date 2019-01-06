@@ -24,7 +24,6 @@
 #include "debug.h"
 #include "alloc-inl.h"
 #include "hash.h"
-#include "libUnTracerHashmap.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -7483,7 +7482,7 @@ int main(int argc, char** argv) {
   struct timeval tv;
   struct timezone tz;
 
-  SAYF(cCYA "UnTracer-AFL " cRST "| FoRTE-Research@Virginia Tech | based on AFL by <lcamtuf@google.com>\n");
+  SAYF(cCYA "UnTracer-AFL " cRST "| FoRTE-Research @ Virginia Tech | based on AFL by <lcamtuf@google.com>\n");
 
   doc_path = access(DOC_PATH, F_OK) ? "docs" : DOC_PATH;
 

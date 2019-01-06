@@ -39,9 +39,9 @@ HELPER_PATH = $(PREFIX)/lib/afl
 DOC_PATH    = $(PREFIX)/share/doc/afl
 MISC_PATH   = $(PREFIX)/share/afl
 
-# PROGS intentionally omit afl-as, which gets installed elsewhere.
+# PROGS intentionally omit untracer-as, which gets installed elsewhere.
 
-PROGS       = untracer-afl libUnTracerDyninst UnTracerDyninst cov-check afl-gcc afl-showmap
+PROGS       = untracer-afl libUnTracerDyninst UnTracerDyninst untracer-gcc afl-showmap
 SH_PROGS    = afl-plot
 
 CFLAGS     ?= -O3 -funroll-loops
@@ -54,14 +54,14 @@ ifneq "$(filter Linux GNU%,$(shell uname))" ""
 endif
 
 ifeq "$(findstring clang, $(shell $(CC) --version 2>/dev/null))" ""
-  TEST_CC   = afl-gcc
+  TEST_CC   = untracer-gcc
 else
-  TEST_CC   = afl-clang
+  TEST_CC   = untracer-clang
 endif
 
 COMM_HDR    = alloc-inl.h config.h debug.h types.h
 
-all: test_x86 $(PROGS) afl-as test_build all_done
+all: test_x86 $(PROGS) untracer-as all_done
 
 ifndef AFL_NO_X86
 
@@ -81,34 +81,30 @@ endif
 # UnTracer dependencies
 
 untracer-afl: untracer-afl.c $(COMM_HDR) | test_x86
-	$(CC) $(CFLAGS) $@.c -o $@ $(LDFLAGS) libUnTracerHashmap.c
+	$(CC) $(CFLAGS) $@.c -o $@ $(LDFLAGS)
 
 libUnTracerDyninst: libUnTracerDyninst.cpp
-	$(CXX) $(CXXFLAGS) -o libUnTracerDyninst.so libUnTracerDyninst.cpp $(LDFLAGS) $(LIBFLAGS) libUnTracerHashmap.c
+	$(CXX) $(CXXFLAGS) -o libUnTracerDyninst.so libUnTracerDyninst.cpp $(LDFLAGS) $(LIBFLAGS)
 
 UnTracerDyninst: UnTracerDyninst.cpp
 	$(CXX) -Wl,-rpath-link,$(DYN_ROOT)/lib -Wl,-rpath-link,$(DYN_ROOT)/include $(CXXFLAGS) -o UnTracerDyninst UnTracerDyninst.cpp $(LDFLAGS)
 
-cov-check: cov-check.c
-	$(CC) -Wall -o cov-check cov-check.c libUnTracerHashmap.c
-
-
 # AFL dependencies
 
-afl-gcc: afl-gcc.c $(COMM_HDR) | test_x86
+untracer-gcc: untracer-gcc.c $(COMM_HDR) | test_x86
 	$(CC) $(CFLAGS) $@.c -o $@ $(LDFLAGS)
-	set -e; for i in afl-g++ afl-clang afl-clang++; do ln -sf afl-gcc $$i; done
+	set -e; for i in untracer-g++ untracer-clang untracer-clang++; do ln -sf untracer-gcc $$i; done
 
-afl-as: afl-as.c afl-as.h $(COMM_HDR) | test_x86
+untracer-as: untracer-as.c untracer-as.h $(COMM_HDR) | test_x86
 	$(CC) $(CFLAGS) $@.c -o $@ $(LDFLAGS)
-	ln -sf afl-as as
+	ln -sf untracer-as as
 
 afl-showmap: afl-showmap.c $(COMM_HDR) | test_x86
 	$(CC) $(CFLAGS) $@.c -o $@ $(LDFLAGS)
 
 ifndef AFL_NO_X86
 
-test_build: afl-gcc afl-as afl-showmap
+test_build: untracer-gcc untracer-as afl-showmap
 	@echo "[*] Testing the CC wrapper and instrumentation output..."
 	unset AFL_USE_ASAN AFL_USE_MSAN; AFL_QUIET=1 AFL_INST_RATIO=100 AFL_PATH=. ./$(TEST_CC) $(CFLAGS) test-instr.c -o test-instr $(LDFLAGS)
 	echo 0 | ./afl-showmap -m none -q -o .test-instr0 ./test-instr
@@ -119,38 +115,35 @@ test_build: afl-gcc afl-as afl-showmap
 
 else
 
-test_build: afl-gcc afl-as afl-showmap
+test_build: untracer-gcc untracer-as afl-showmap
 	@echo "[!] Note: skipping build tests (you may need to use LLVM or QEMU mode)."
 
 endif
 
-all_done: test_build
-	@if [ ! "`which clang 2>/dev/null`" = "" ]; then echo "[+] LLVM users: see llvm_mode/README.llvm for a faster alternative to afl-gcc."; fi
+all_done: 
 	@echo "[+] All done! Be sure to review README - it's pretty short and useful."
-	@if [ "`uname`" = "Darwin" ]; then printf "\nWARNING: Fuzzing on MacOS X is slow because of the unusually high overhead of\nfork() on this OS. Consider using Linux or *BSD. You can also use VirtualBox\n(virtualbox.org) to put AFL inside a Linux or *BSD VM.\n\n"; fi
-	@! tty <&1 >/dev/null || printf "\033[0;30mNOTE: If you can read this, your terminal probably uses white background.\nThis will make the UI hard to read. See docs/status_screen.txt for advice.\033[0m\n" 2>/dev/null
-
+	
 .NOTPARALLEL: clean
 
 clean:
-	rm -f $(PROGS) afl-as as afl-g++ afl-clang afl-clang++ *.o *~ a.out core core.[1-9][0-9]* *.stackdump test .test test-instr .test-instr0 .test-instr1 
+	rm -f $(PROGS) untracer-as as untracer-g++ untracer-clang untracer-clang++ *.o *~ a.out core core.[1-9][0-9]* *.stackdump test .test test-instr .test-instr0 .test-instr1 
 
 install: all
 	mkdir -p -m 755 $${DESTDIR}$(BIN_PATH) $${DESTDIR}$(HELPER_PATH) $${DESTDIR}$(DOC_PATH) $${DESTDIR}$(MISC_PATH)
 	rm -f $${DESTDIR}$(BIN_PATH)/afl-plot.sh
 	install -m 755 $(PROGS) $(SH_PROGS) $${DESTDIR}$(BIN_PATH)
-	rm -f $${DESTDIR}$(BIN_PATH)/afl-as
+	rm -f $${DESTDIR}$(BIN_PATH)/untracer-as
 	if [ -f afl-qemu-trace ]; then install -m 755 afl-qemu-trace $${DESTDIR}$(BIN_PATH); fi
 ifndef AFL_TRACE_PC
-	if [ -f afl-clang-fast -a -f afl-llvm-pass.so -a -f afl-llvm-rt.o ]; then set -e; install -m 755 afl-clang-fast $${DESTDIR}$(BIN_PATH); ln -sf afl-clang-fast $${DESTDIR}$(BIN_PATH)/afl-clang-fast++; install -m 755 afl-llvm-pass.so afl-llvm-rt.o $${DESTDIR}$(HELPER_PATH); fi
+	if [ -f untracer-clang-fast -a -f afl-llvm-pass.so -a -f afl-llvm-rt.o ]; then set -e; install -m 755 untracer-clang-fast $${DESTDIR}$(BIN_PATH); ln -sf untracer-clang-fast $${DESTDIR}$(BIN_PATH)/untracer-clang-fast++; install -m 755 afl-llvm-pass.so afl-llvm-rt.o $${DESTDIR}$(HELPER_PATH); fi
 else
-	if [ -f afl-clang-fast -a -f afl-llvm-rt.o ]; then set -e; install -m 755 afl-clang-fast $${DESTDIR}$(BIN_PATH); ln -sf afl-clang-fast $${DESTDIR}$(BIN_PATH)/afl-clang-fast++; install -m 755 afl-llvm-rt.o $${DESTDIR}$(HELPER_PATH); fi
+	if [ -f untracer-clang-fast -a -f afl-llvm-rt.o ]; then set -e; install -m 755 untracer-clang-fast $${DESTDIR}$(BIN_PATH); ln -sf untracer-clang-fast $${DESTDIR}$(BIN_PATH)/untracer-clang-fast++; install -m 755 afl-llvm-rt.o $${DESTDIR}$(HELPER_PATH); fi
 endif
 	if [ -f afl-llvm-rt-32.o ]; then set -e; install -m 755 afl-llvm-rt-32.o $${DESTDIR}$(HELPER_PATH); fi
 	if [ -f afl-llvm-rt-64.o ]; then set -e; install -m 755 afl-llvm-rt-64.o $${DESTDIR}$(HELPER_PATH); fi
-	set -e; for i in afl-g++ afl-clang afl-clang++; do ln -sf afl-gcc $${DESTDIR}$(BIN_PATH)/$$i; done
-	install -m 755 afl-as $${DESTDIR}$(HELPER_PATH)
-	ln -sf afl-as $${DESTDIR}$(HELPER_PATH)/as
+	set -e; for i in untracer-g++ untracer-clang untracer-clang++; do ln -sf untracer-gcc $${DESTDIR}$(BIN_PATH)/$$i; done
+	install -m 755 untracer-as $${DESTDIR}$(HELPER_PATH)
+	ln -sf untracer-as $${DESTDIR}$(HELPER_PATH)/as
 	install -m 644 docs/README docs/ChangeLog docs/*.txt $${DESTDIR}$(DOC_PATH)
 	cp -r testcases/ $${DESTDIR}$(MISC_PATH)
 	cp -r dictionaries/ $${DESTDIR}$(MISC_PATH)

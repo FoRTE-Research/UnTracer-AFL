@@ -10,7 +10,6 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "libUnTracerHashmap.h"
 
 #define FORKSRV_FD 198	
 
@@ -23,14 +22,6 @@ static char * trace_bits;
 static long shm_id;
 #define SHM_ENV_VAR "__AFL_SHM_ID"
 
-/* Basic block hashmap data struct. */
-map_t bbHashMap;		
-typedef struct hashmap_entry_struct
-{
-	char entryKey[256];
-}	hashmap_entry;
-hashmap_entry* bbHmEntry;
-
 /* This is for the dummy tracer - i.e., it exits when hitting <main>. */
 void mainExit() {
 	exit(0);
@@ -40,9 +31,6 @@ void mainExit() {
 void forkServer() {
 	int temp_data;
 	pid_t fork_pid;
-
-	/* Set up hashmap. */
-	bbHashMap = hashmap_new();
 
 	/* Set up the SHM bitmap. */
 	char *shm_env_var = getenv(SHM_ENV_VAR);

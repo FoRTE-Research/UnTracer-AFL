@@ -35,7 +35,7 @@
 #include "debug.h"
 #include "alloc-inl.h"
 
-#include "afl-as.h"
+#include "untracer-as.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -58,7 +58,9 @@ static u8   be_quiet,           /* Quiet mode (no stderr output)        */
             pass_thru,          /* Just pass data through?              */
             just_version,       /* Just show version?                   */
             sanitizer,          /* Using ASAN / MSAN                    */
-            fsrv_only=0;          /* Use forkserver-only instrumentation? */
+            fsrv_only=1;        /* Use forkserver-only instrumentation? 
+                                 * (enabled by default)
+                                */
 
 static u32  inst_ratio = 100,   /* Instrumentation probability (%)      */
             as_par_cnt = 1;     /* Number of params to 'as'             */
@@ -134,11 +136,13 @@ static void edit_params(int argc, char** argv) {
 
   for (i = 1; i < argc - 1; i++) {
 
+    /*
     if (!strcmp(argv[i], "-F")) {
       fsrv_only = 1;
       SAYF(cBRI "Instrumenting in " cBLU "forkserver-only " cBRI "mode...\n" cRST);
       continue;
     }
+    */
 
     if (!strcmp(argv[i], "--64")) use_64bit = 1;
     else if (!strcmp(argv[i], "--32")) use_64bit = 0;
@@ -373,12 +377,12 @@ static void add_instrumentation(void) {
       if (line[1] == 'j' && line[2] != 'm' && R(100) < inst_ratio) {
 
         if(!fsrv_only) {
-	  fprintf(outf, use_64bit ? trampoline_fmt_64 : trampoline_fmt_32,
-		  R(MAP_SIZE));
 
-	  ins_lines++;
-	}
-	
+          fprintf(outf, use_64bit ? trampoline_fmt_64 : trampoline_fmt_32,
+          R(MAP_SIZE));
+          ins_lines++;
+
+        }
       }
 
       continue;
@@ -439,9 +443,10 @@ static void add_instrumentation(void) {
              In forkserver-only mode, we want both conditions to be 0. */ 
 
           if (!skip_next_label)
-	    instrument_next = fsrv_only ? 0 : 1; 
+            instrument_next = fsrv_only ? 0 : 1; 
+          
           else
-	    skip_next_label = 0;
+            skip_next_label = 0;
         }
 
       } else {
@@ -450,11 +455,11 @@ static void add_instrumentation(void) {
            In forkserver-only mode, we only instrument <main>. */
 
         if (fsrv_only) {
-	  u8 * matchAddress = strstr(line, "main:");
+          u8 * matchAddress = strstr(line, "main:");
           if (matchAddress != NULL && (matchAddress == line || isspace( *(matchAddress - 1) ) ))
-	    instrument_next = 1;   
+            instrument_next = 1;   
           else
-	    instrument_next = 0;
+            instrument_next = 0;
         }
         else 
           instrument_next = 1;
@@ -502,7 +507,8 @@ int main(int argc, char** argv) {
 
   if (isatty(2) && !getenv("AFL_QUIET")) {
 
-    SAYF(cCYA "afl-as " cBRI VERSION cRST " by <lcamtuf@google.com>\n");
+    SAYF(cCYA "UnTracer-AFL " cRST "| FoRTE-Research @ Virginia Tech | based on AFL by <lcamtuf@google.com>\n");
+    SAYF(cBRI "Instrumenting in " cBLU "forkserver-only " cBRI "mode...\n" cRST);
  
   } else be_quiet = 1;
 

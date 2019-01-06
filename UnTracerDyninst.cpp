@@ -29,7 +29,6 @@ char *analyzedBBListPath = NULL;
 char *instrumentedBBListPath = NULL;
 char *skipListPath = NULL;
 
-
 bool useMainExit = false;
 
 bool skipMainModule = false;
