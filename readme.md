@@ -18,8 +18,8 @@ In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver exe
     </td>
   </tr>
   <tr>
-    <td><b>Developer:</b></td>
-    <td>Stefan Nagy (<a href="mailto:snagy2@vt.edu">snagy2@vt.edu</a>)</td>
+    <td><b>Developers:</b></td>
+    <td>Stefan Nagy (<a href="mailto:snagy2@vt.edu">snagy2@vt.edu</a>) and Matthew Hicks (<a href="mailto:mdhicks2@vt.edu">mdhicks2@vt.edu</a>)</td>
   </tr>
   <tr>
     <td><b>License:</b></td>
