@@ -55,12 +55,12 @@ static u8   be_quiet,               /* Quiet mode                        */
 
 static void find_as(u8* argv0) {
 
-  u8 *afl_path = getenv("AFL_PATH");
+  u8 *afl_path = getenv("UNTRACER-AFL_PATH");
   u8 *slash, *tmp;
 
   if (afl_path) {
 
-    tmp = alloc_printf("%s/as", afl_path);
+    tmp = alloc_printf("%s/untracer-as", afl_path);
 
     if (!access(tmp, X_OK)) {
       as_path = afl_path;
@@ -82,7 +82,7 @@ static void find_as(u8* argv0) {
     dir = ck_strdup(argv0);
     *slash = '/';
 
-    tmp = alloc_printf("%s/afl-as", dir);
+    tmp = alloc_printf("%s/untracer-as", dir);
 
     if (!access(tmp, X_OK)) {
       as_path = dir;
@@ -95,12 +95,12 @@ static void find_as(u8* argv0) {
 
   }
 
-  if (!access(AFL_PATH "/as", X_OK)) {
+  if (!access(AFL_PATH "/untracer-as", X_OK)) {
     as_path = AFL_PATH;
     return;
   }
 
-  FATAL("Unable to find AFL wrapper binary for 'as'. Please set AFL_PATH");
+  FATAL("Unable to find AFL wrapper binary for 'as'. Please set UNTRACER-AFL_PATH");
  
 }
 
