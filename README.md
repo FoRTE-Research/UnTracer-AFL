@@ -87,5 +87,5 @@ untracer-afl -i [/path/to/seed/dir] -o [/path/to/out/dir] [optional_args] -- [/p
 * `no new bits (discarded)` - Number of testcases which were marked coverage-increasing by the oracle but did not actually increase coverage. This should (ideally) be 0.
 
 ## 
-<p align=center> <a href="https:/www.cs.vt.edu"><img border="0" alt="W3Schools" src="http://people.cs.vt.edu/snagy2/img/vt_inline_computer_science.png" width="60%" height="60%">
+<p align=center> <a href="https://www.cs.vt.edu"><img border="0" src="http://people.cs.vt.edu/snagy2/img/vt_inline_computer_science.png" width="60%" height="60%">
 </a> </p>
