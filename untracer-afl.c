@@ -24,7 +24,6 @@
 #include "debug.h"
 #include "alloc-inl.h"
 #include "hash.h"
-
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -38,7 +37,6 @@
 #include <termios.h>
 #include <dlfcn.h>
 #include <sched.h>
-
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/shm.h>
@@ -48,7 +46,6 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <sys/file.h>
-
 
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined (__OpenBSD__)
 #  include <sys/sysctl.h>
@@ -70,54 +67,50 @@
 #  define EXP_ST static
 #endif /* ^AFL_LIB */
 
-// -------------- stefan ------------------------------------------------
+/* -------------- UnTracer-AFL vars ------------------------------------- */
 
 #define FORKSRV_FD 198            /* Hardcoded forkserver FD's. Utilized in IPC. */
 #define SIGTRAP 5
 
-char ** target_argv;  
+char ** target_argv;                  /* ARGV parameters for all targets  */
 char ** oracle_argv;
 char ** crash_oracle_argv;
-char ** tracer_argv;
+char ** tracer_argv;                
 
-int oracle_cov[MAP_SIZE];
-int crash_oracle_cov[MAP_SIZE];
-int block_array[MAP_SIZE];
+int oracle_cov[MAP_SIZE];             /* Arrays of covered block ID's     */
+int crash_oracle_cov[MAP_SIZE];       
+int block_array[MAP_SIZE];            /* Array of all basic blocks        */
 
-EXP_ST u32 blocks_total = 0,
-           blocks_seen = 0,
-           crash_blocks = 0,
-           total_traced = 0,
-           total_queued = 0,
-           trace_tmouts = 0,
-           trace_nobits = 0,
-           calib_execs = 0;
+EXP_ST u32 blocks_total = 0,          /* Number total basic blocks        */
+           blocks_seen = 0,           /* Number of visited basic blocks   */
+           total_traced = 0,          /* Number traced testcases          */
+           total_queued = 0,          /* Number queued testcases          */
+           trace_tmouts = 0,          /* Number trace timeouts            */
+           trace_nobits = 0,          /* Number traced w/o new bits       */
+           calib_execs = 0;           /* Number of calibration executions */
 
 EXP_ST u64 target_size;
 
-EXP_ST s32 oracle_fsrv_ctlFD,         /* Forkserver control pipes. */
+EXP_ST s32 oracle_fsrv_ctlFD,         /* Forkserver control pipes         */
            tracer_fsrv_ctlFD,
-           oracle_fsrv_stFD,          /* Forkserver status pipes. */
-           tracer_fsrv_stFD,   
-           oracle_fsrv_PID,           /* Target forkserver PIDs. */
-           tracer_fsrv_PID,
-           oracle_child_PID,          /* Target child PIDs. */
-           tracer_child_PID,
-           
            crash_oracle_fsrv_ctlFD,
+           oracle_fsrv_stFD,          /* Forkserver status pipes          */
+           tracer_fsrv_stFD,   
            crash_oracle_fsrv_stFD,
+           oracle_fsrv_PID,           /* Forkserver PIDs                  */
+           tracer_fsrv_PID,
            crash_oracle_fsrv_PID,
+           oracle_child_PID,          /* Forkserver child PIDs            */
+           tracer_child_PID,
            crash_oracle_child_PID;
 
 EXP_ST u8 *target_path,               /* Path to target binary            */
-          *tracer_path, 
-          *dummy_path,                         
-          *oracle_path,               
-          *trace_path,
-          *bb_lst_path,
-          *crash_oracle_path;
+          *oracle_path,               /* Path to oracle binary            */    
+          *tracer_path,               /* Path to tracer binary            */
+          *crash_oracle_path,         /* Path to crash oracle             */ 
+          *bb_lst_path;               /* Path to basic block list         */ 
 
-// -------------- stefan ------------------------------------------------
+/* -------------- AFL vars ---------------------------------------------- */
 
 /* Lots of globals, but mostly for the status UI and other things where it
    really makes no sense to haul them around as function parameters. */
@@ -259,8 +252,6 @@ static s32 cpu_aff = -1;              /* Selected CPU core                */
 
 static FILE* plot_file;               /* Gnuplot output file              */
 
-
-
 struct queue_entry {
 
   u8* fname;                          /* File name for the test case      */
@@ -357,14 +348,14 @@ enum {
   /* 03 */ FAULT_ERROR,
   /* 04 */ FAULT_NOINST,
   /* 05 */ FAULT_NOBITS,
-  /* 06 */ FAULT_TRAP // stefan
+  /* 06 */ FAULT_TRAP /* Added for SIGTRAP handling. */
 };
 
 
 void execute(char * tmp[], char * pid_name, int print_output){
 
   /* Helper function for running execve() with error checking
-   * and output-printing toggling. */
+   * and toggle-able STDOUT printing. */
 
   int pid_fork, status;
 
@@ -419,11 +410,7 @@ void copy_binary(char* src_path, char* dst_path){
   return;
 }
 
-static void setup_args(int argc, char ** argv){
-
-  /* Set up relevant paths. */
-  trace_path = alloc_printf("%s/.cur_trace", out_dir);  
-  bb_lst_path = alloc_printf("%s/.bblist", out_dir);  
+static void setup_args(int argc, char ** argv){  
 
   /* Set up relevant binary paths and arg arrays. */
   target_argv = argv + optind;
@@ -434,7 +421,6 @@ static void setup_args(int argc, char ** argv){
 
   oracle_path = alloc_printf("%s/%s.oracle", out_dir, basename(target_path));
   tracer_path = alloc_printf("%s/%s.tracer", out_dir, basename(target_path));
-  dummy_path  = alloc_printf("%s/%s.dummy", out_dir, basename(target_path));
   crash_oracle_path = alloc_printf("%s/%s.crash_oracle", out_dir, basename(target_path)); 
 
   /* If present, replace "@@" with out_file. */
@@ -461,9 +447,7 @@ static void setup_args(int argc, char ** argv){
 
 void setup_oracle(u8 * path_to_oracle){
 
-  // stefan
-
-  //ACTF("Setting up oracle binary...");
+  /* Sets up the oracle by copying it from the forkserver-instrumented target. */
 
   u8* fname = alloc_printf("%s", path_to_oracle);
   unlink(fname);
@@ -484,7 +468,8 @@ void setup_oracle(u8 * path_to_oracle){
     exit(EXIT_FAILURE); 
   }
 
-  /* Found afl-cc-instrumented forkserver (whitebox mode). */
+  /* Verify that that forkserver has been instrumented */
+
   if (memmem(target_data, target_size, "__afl_maybe_log", strlen("__afl_maybe_log") + 1))
     copy_binary(target_path, path_to_oracle);    
   
@@ -502,19 +487,20 @@ void setup_tracer(){
    * To eliminate these, we simply execute the instrumented tracer once and 
    * prune the basic blocks which occur. */
 
-  u8* fname = alloc_printf("%s", tracer_path);
-  unlink(fname);
-  ck_free(fname);
-
-  fname = alloc_printf("%s", dummy_path);
-  unlink(fname);
-  ck_free(fname);
-
-  copy_binary(target_path, tracer_path);
-
   char nop[1] = {0x90};
   char * data = malloc(target_size);
   long int offset;
+
+  /* Assign basic block list path. */
+  bb_lst_path = alloc_printf("%s/.bblist", out_dir);  
+
+  /* Set up paths used for initial static analysis phase. */
+  EXP_ST u8 *dummy_path, *trace_path;
+  dummy_path = alloc_printf("%s/%s.dummy", out_dir, basename(target_path));
+  trace_path = alloc_printf("%s/.cur_trace", out_dir);  
+
+  /* Duplicate the target binary. */
+  copy_binary(target_path, tracer_path);
 
   /* NOP target forkserver callback since we don't want conlifcts with Dyninst's forkserver. */
   /* Find the starting offset - where the three consecutive nops lie. */
@@ -2279,9 +2265,11 @@ static u8 run_target(s32 * child_PID, s32 * fsrv_ctlFD, s32 * fsrv_stFD, u32 tim
 
     kill_signal = WTERMSIG(status);
 
-    if (child_timed_out && (kill_signal == SIGKILL || kill_signal == SIGTRAP)) return FAULT_TMOUT; // stefan
+    /* We process all timeout-producing testcases (including SIGTRAPs) as timeouts. */
+    if (child_timed_out && (kill_signal == SIGKILL || kill_signal == SIGTRAP)) return FAULT_TMOUT; 
    
-    if (kill_signal == SIGTRAP) return FAULT_TRAP; // stefan
+    /* Catches UnTracer-AFL's oracle interrupt */
+    if (kill_signal == SIGTRAP) return FAULT_TRAP; 
 
     return FAULT_CRASH;
   }
@@ -2358,7 +2346,7 @@ static void show_stats(void);
    to warn about flaky or otherwise problematic test cases early on; and when
    new paths are discovered to detect variable behavior and so on. */
 
-// stefan
+/* As calibration requires full tracing, we call the tracer binary in this run_target() context. */
 
 static u8 calibrate_case(struct queue_entry* q, u8* use_mem, u32 handicap, u8 from_queue) {
 
@@ -2525,8 +2513,6 @@ static void check_map_coverage(void) {
 /* Perform dry run of all test cases to confirm that the app is working as
    expected. This is done only for the initial inputs, and only once. */
 
-// stefan
-
 static void perform_dry_run() {
 
   struct queue_entry* q = queue;
@@ -2553,7 +2539,9 @@ static void perform_dry_run() {
 
     close(fd);
 
-    res = calibrate_case(q, use_mem, 0, 1); // stefan 
+    /* Since calibration involves tracing, we must 
+     * unmodify these blocks in the oracle. */
+    res = calibrate_case(q, use_mem, 0, 1); 
     blocks_seen += unmodify_oracle(oracle_path, oracle_cov);
 
     ck_free(use_mem);
@@ -2568,7 +2556,7 @@ static void perform_dry_run() {
 
       case FAULT_NONE:
 
-        if (q == queue) check_map_coverage(); // stefan
+        if (q == queue) check_map_coverage(); 
 
         if (crash_mode) FATAL("Test case '%s' does *NOT* crash", fn);
 
@@ -2918,7 +2906,7 @@ void stop_forkserver(int * fork_PID, int * fsrv_ctlFD, int * fsrv_stFD){
 
 void start_forkserver(s32 *fork_PID, s32 *fsrv_ctlFD, s32 *fsrv_stFD, s32 FSRV_FD, char **fsrv_argv) {
 
-  // stefan
+  /* We reworked this function to launch whatever forkserver is specified via the arguments. */
 
   int st_pipe[2], ctl_pipe[2];
   int status;
@@ -3116,7 +3104,6 @@ static u8 save_if_interesting(void* mem, u32 len, u8 fault) {
 
       // Stop the crash oracle, modify it, and restart it
       stop_forkserver(&crash_oracle_fsrv_PID, &crash_oracle_fsrv_ctlFD, &crash_oracle_fsrv_stFD);
-      crash_blocks += unmodify_oracle(crash_oracle_path, crash_oracle_cov);
       start_forkserver(&crash_oracle_fsrv_PID, &crash_oracle_fsrv_ctlFD, &crash_oracle_fsrv_stFD, FORKSRV_FD, crash_oracle_argv);  
       if (!unique_crashes) write_crash_readme();
 
@@ -3686,15 +3673,6 @@ static void maybe_delete_out_dir(void) {
 
   }
 
-  // stefan
-  //fn = alloc_printf("%s/%s", oracle_path, out_dir);
-  //unlink(fn); /* Ignore errors */
-  //ck_free(fn);
-
-  //fn = alloc_printf("%s/%s", tracer_path, out_dir);
-  //unlink(fn); /* Ignore errors */
-  //ck_free(fn);
-
   fn = alloc_printf("%s/crashes", out_dir);
 
   /* Make backup of the crashes directory if it's not empty and if we're
@@ -4120,7 +4098,7 @@ static void show_stats(void) {
 
   }
 
-  // stefan
+  /* Display total and (optionally) unique timeouts (if UNTRACER_HANG_TMOUT used). */
   if (getenv("UNTRACER_HANG_TMOUT"))
     sprintf(tmp, "%s (%s%s unique)", DI(total_tmouts), DI(unique_tmouts),
             (unique_hangs >= KEEP_UNIQUE_HANG) ? "+" : "");
@@ -4130,7 +4108,7 @@ static void show_stats(void) {
   SAYF (bSTG bV bSTOP "  total tmouts  : " cRST "%-22s" bSTG bV "\n", tmp);
 
 
-  // stefan
+  /* Show total calibration and trimming execution totals. */
   SAYF(bVR cCYA bSTOP " additional stats " bSTG bH10 bH5 bH2 bH2 bHT bH10 bH20 bH10 bVL "\n");
     
   sprintf(tmp, "%s (%0.02f%%)", DI(calib_execs), ((double)calib_execs) * 100 / total_execs);
@@ -4598,7 +4576,7 @@ EXP_ST u8 common_fuzz_stuff(u8* out_buf, u32 len) {
 
   /* This handles FAULT_ERROR for us: */
  
-  queued_discovered += save_if_interesting(out_buf, len, fault); // stefan
+  queued_discovered += save_if_interesting(out_buf, len, fault); 
 
   if (!(stage_cur % stats_update_freq) || stage_cur + 1 == stage_max)
     show_stats(); 
@@ -6775,8 +6753,6 @@ static void handle_timeout(int sig){
    isn't a shell script - a common and painful mistake. We also check for
    a valid ELF header and for evidence of AFL instrumentation. */
 
-// Stefan
-
 EXP_ST void check_binary(u8* fname) {
 
   u8* env_path = 0;
@@ -7625,31 +7601,31 @@ int main(int argc, char** argv) {
 
   if (!out_file) setup_stdio_file();
 
-  check_binary(argv[optind]); // stefan 
+  check_binary(argv[optind]); 
 
-  setup_args(argc, argv); // stefan
+  setup_args(argc, argv); 
 
   ACTF("Setting up oracle binaries...");
-  setup_oracle(oracle_path); // stefan
+  setup_oracle(oracle_path); 
   setup_oracle(crash_oracle_path);
 
   ACTF("Setting up tracer binary...");
   setup_tracer();
 
   ACTF("Setting up basic block array...");
-  setup_block_array(); // stefan
+  setup_block_array(); 
 
   ACTF("Modifying oracle binaries...");
-  modify_oracle(oracle_path); // stefan 
+  modify_oracle(oracle_path);
   modify_oracle(crash_oracle_path);
 
   ACTF("Starting tracer forkserver...");
-  start_forkserver(&tracer_fsrv_PID, &tracer_fsrv_ctlFD, &tracer_fsrv_stFD, FORKSRV_FD, tracer_argv); // stefan
+  start_forkserver(&tracer_fsrv_PID, &tracer_fsrv_ctlFD, &tracer_fsrv_stFD, FORKSRV_FD, tracer_argv); 
 
-  perform_dry_run(); // stefan
+  perform_dry_run(); 
 
   ACTF("Starting oracle forkserver...");
-  start_forkserver(&oracle_fsrv_PID, &oracle_fsrv_ctlFD, &oracle_fsrv_stFD, FORKSRV_FD, oracle_argv); // stefan
+  start_forkserver(&oracle_fsrv_PID, &oracle_fsrv_ctlFD, &oracle_fsrv_stFD, FORKSRV_FD, oracle_argv); 
 
   ACTF("Starting crash oracle forkserver...");
   start_forkserver(&crash_oracle_fsrv_PID, &crash_oracle_fsrv_ctlFD, &crash_oracle_fsrv_stFD, FORKSRV_FD, crash_oracle_argv); 
