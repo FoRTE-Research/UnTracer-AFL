@@ -1,12 +1,4 @@
-|             |                |
-|-------------|----------------|
-|**AUTHOR:**  | Stefan Nagy  |
-|**EMAIL:**   | snagy2@vt.edu |
-|**LICENSE:** | [MIT License](LICENSE) |
-|**DISCLAIMER:**   | This software is strictly a research prototype. |
-
 # UnTracer-AFL
-
 This repository contains an implementation of our prototype coverage-guided tracing framework UnTracer in the popular coverage-guided fuzzer [AFL](http://lcamtuf.coredump.cx/afl). Coverage-guided tracing employs two versions of the target binary -- (1) a forkserver-only `oracle` modified with basic block-level software interrupts for quickly identifying coverage-increasing testcases; and (2) a fully-instrumented `tracer` for tracing the coverage of all coverage-increasing testcases. 
 
 In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver execution model](http://lcamtuf.blogspot.com/2014/10/fuzzing-binaries-without-execve.html). For `oracle` instrumentation we require all target binaries be compiled with `untracer-cc` -- our "forkserver-only" modification of AFL's assembly-time instrumenter `afl-cc`. For `tracer` binary instrumentation we utilize [Dyninst](http://www.dyninst.org/) with much of our code based off of [AFL-Dyninst](https://github.com/vanhauser-thc/afl-dyninst). We plan to incorporate a purely "black-box" (source-unavailable) instrumentation approach in the near future. Our current implementation of UnTracer supports **basic block coverage**. 
@@ -18,6 +10,18 @@ In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver exe
   <tr>
     <td><b>Citing this repository:</b></td>
     <td>@inproceedings {nagy:fullspeedfuzzing,<br> author = {Stefan Nagy and Matthew Hicks},<br> title = {{Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing},<br> booktitle = {40th {IEEE} Symposium on Security and Privacy (S&P},<br> year = {2019},}</td>
+  </tr>
+  <tr>
+    <td><b>Developer:</b></td>
+    <td>Stefan Nagy (<a href="mailto:snagy2@vt.edu">snagy2@vt.edu</a>)</td>
+  </tr>
+  <tr>
+    <td><b>License:</b></td>
+    <td><a href="/FoRTE-Research/UnTracer-AFL/blob/master/LICENSE">MIT License</a></td>
+  </tr>
+  <tr>
+    <td><b>Disclaimer:</b></td>
+    <td><i>This software is strictly a research prototype.</i></td>
   </tr>
 </table>
 
