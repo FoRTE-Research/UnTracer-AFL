@@ -11,14 +11,15 @@ This repository contains an implementation of our prototype coverage-guided trac
 
 In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver execution model](http://lcamtuf.blogspot.com/2014/10/fuzzing-binaries-without-execve.html). For `oracle` instrumentation we require all target binaries be compiled with `untracer-cc` -- our "forkserver-only" modification of AFL's assembly-time instrumenter `afl-cc`. For `tracer` binary instrumentation we utilize [Dyninst](http://www.dyninst.org/) with much of our code based off of [AFL-Dyninst](https://github.com/vanhauser-thc/afl-dyninst). We plan to incorporate a purely "black-box" (source-unavailable) instrumentation approach in the near future. Our current implementation of UnTracer supports **basic block coverage**. 
 
-| | 
-| :-: |
-| **Presented in our paper** *[Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing](https://arxiv.org/abs/1812.11875)* <br> (to appear in IEEE S&P 2019). |
-
-| | |
-| - | - |
-| **Citing this repository:** | @inproceedings {nagy:fullspeedfuzzing,<br> author = {Stefan Nagy and Matthew Hicks},<br> title = {{Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing},<br> booktitle = {40th {IEEE} Symposium on Security and Privacy (S&P},<br> year = {2019},}|
-
+<table>
+  <tr>
+    <td colspan="2"><p ALIGN=CENTER><b>Presented in our paper</b> <a href="https://arxiv.org/abs/1812.11875"><i>Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing</i></a><br>(to appear in IEEE S&P 2019).</p></td>
+  </tr>
+  <tr>
+    <td><b>Citing this repository:</b></td>
+    <td>@inproceedings {nagy:fullspeedfuzzing,<br> author = {Stefan Nagy and Matthew Hicks},<br> title = {{Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing},<br> booktitle = {40th {IEEE} Symposium on Security and Privacy (S&P},<br> year = {2019},}</td>
+  </tr>
+</table>
 
 
 ## INSTALLATION
