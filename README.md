@@ -15,16 +15,11 @@ In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver exe
 | :-: |
 | **Presented in our paper** *[Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing](https://arxiv.org/abs/1812.11875)* <br> (to appear in IEEE S&P 2019). |
 
-#### Citing this repository:
-```
-@inproceedings {nagy:fullspeedfuzzing,
-  author = {Stefan Nagy and Matthew Hicks},
-  title = {{Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing},
-  booktitle = {40th {IEEE} Symposium on Security and Privacy (S&P},
-  month = {May}
-  year = {2019},
-}
-```
+| | |
+| - | - |
+| **Citing this repository:** | @inproceedings {nagy:fullspeedfuzzing,<br> author = {Stefan Nagy and Matthew Hicks},<br> title = {{Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing},<br> booktitle = {40th {IEEE} Symposium on Security and Privacy (S&P},<br> year = {2019},}|
+
+
 
 ## INSTALLATION
 #### 1. Download and build Dyninst (we recommend v9.3.2)
