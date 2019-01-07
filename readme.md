@@ -68,7 +68,15 @@ make clean && make all
 ```
 
 ## USAGE
-First, compile all target binaries in "forkserver-only" mode using `untracer-clang/clang++` or `untracer-gcc/g++`. Note that only **non-position-independent** target binaries are supported, so compile all target binaries with CFLAG `-no-pie` (unnecessary for Clang).
+First, compile all target binaries using "forkserver-only" instrumentation. [As with AFL](https://github.com/mcarpenter/afl), you will need to manually set the C compiler (`untracer-clang` or `untracer-gcc`) and/or C++ compiler (`untracer-clang++` or `untracer-g++`). Note that only **non-position-independent** target binaries are supported, so compile all target binaries with CFLAG `-no-pie` (unnecessary for Clang). For example:
+```
+$ CC=/path/to/afl/untracer-clang ./configure --disable-shared
+$ CXX=/path/to/afl/untracer-clang++.
+$ make clean all
+Instrumenting in forkserver-only mode...
+```
+
+We provide a set of fuzzing-ready benchmarks available here: [https://github.com/FoRTE-Research/FoRTE-FuzzBench](https://github.com/FoRTE-Research/FoRTE-FuzzBench).
 
 Then, run as follows:
 ```
