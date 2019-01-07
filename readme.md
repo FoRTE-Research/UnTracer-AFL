@@ -78,7 +78,7 @@ Instrumenting in forkserver-only mode...
 
 We provide a set of fuzzing-ready benchmarks available here: [https://github.com/FoRTE-Research/FoRTE-FuzzBench](https://github.com/FoRTE-Research/FoRTE-FuzzBench).
 
-Then, run as follows:
+Then, run `untracer-afl` as follows:
 ```
 untracer-afl -i [/path/to/seed/dir] -o [/path/to/out/dir] [optional_args] -- [/path/to/target] [target_args]
 ```
