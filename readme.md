@@ -1,7 +1,7 @@
 # UnTracer-AFL
-This repository contains an implementation of our prototype coverage-guided tracing framework UnTracer in the popular coverage-guided fuzzer [AFL](http://lcamtuf.coredump.cx/afl). Coverage-guided tracing employs two versions of the target binary -- (1) a forkserver-only `oracle` modified with basic block-level software interrupts for quickly identifying coverage-increasing testcases; and (2) a fully-instrumented `tracer` for tracing the coverage of all coverage-increasing testcases. 
+This repository contains an implementation of our prototype coverage-guided tracing framework **UnTracer** in the popular coverage-guided fuzzer [AFL](http://lcamtuf.coredump.cx/afl). Coverage-guided tracing employs two versions of the target binary: (1) a forkserver-only `oracle` binary modified with basic block-level software interrupts on unseen basic blocks for quickly identifying coverage-increasing testcases and (2) a fully-instrumented `tracer` binary for tracing the coverage of all coverage-increasing testcases. 
 
-In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver execution model](http://lcamtuf.blogspot.com/2014/10/fuzzing-binaries-without-execve.html). For `oracle` instrumentation we require all target binaries be compiled with `untracer-cc` -- our "forkserver-only" modification of AFL's assembly-time instrumenter `afl-cc`. For `tracer` binary instrumentation we utilize [Dyninst](http://www.dyninst.org/) with much of our code based off of [AFL-Dyninst](https://github.com/vanhauser-thc/afl-dyninst). We plan to incorporate a purely "black-box" (source-unavailable) instrumentation approach in the near future. Our current implementation of UnTracer supports **basic block coverage**. 
+In UnTracer, both the oracle and tracer binaries use the AFL-inspired [forkserver execution model](http://lcamtuf.blogspot.com/2014/10/fuzzing-binaries-without-execve.html). For `oracle` instrumentation we require all target binaries be compiled with `untracer-cc` -- our "forkserver-only" modification of AFL's assembly-time instrumenter `afl-cc`. For `tracer` binary instrumentation we utilize [Dyninst](http://www.dyninst.org/) with much of our code based-off of [AFL-Dyninst](https://github.com/vanhauser-thc/afl-dyninst). We plan to incorporate a purely "black-box" (source-unavailable) instrumentation approach in the near future. Our current implementation of UnTracer supports **basic block coverage**. 
 
 <table>
   <tr>
@@ -33,7 +33,7 @@ In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver exe
 
 
 ## INSTALLATION
-#### 1. Download and build Dyninst (we recommend v9.3.2)
+#### 1. Download and build Dyninst (we used v9.3.2)
 ```
 sudo apt-get install cmake m4 zlib1g-dev libboost-all-dev libiberty-dev
 wget https://github.com/dyninst/dyninst/archive/v9.3.2.tar.gz
@@ -45,7 +45,7 @@ make
 make install
 ```
 
-#### 2. Download UnTracer-AFL
+#### 2. Download UnTracer-AFL (this repo)
 ```
 git clone https://github.com/FoRTE-Research/UnTracer-AFL
 ```
