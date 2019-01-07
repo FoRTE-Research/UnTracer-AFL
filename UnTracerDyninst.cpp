@@ -30,7 +30,6 @@ char *instrumentedBBListPath = NULL;
 char *skipListPath = NULL;
 
 bool useMainExit = false;
-
 bool skipMainModule = false;
 bool includeSharedLib = false;
 bool verbose = false;
@@ -38,7 +37,6 @@ bool initInstrumented = false;
 
 int numBlksToSkip = 0;
 int dynfix = 0;
-
 unsigned int minBlkSize = 1;
 
 Dyninst::Address entryPoint;
@@ -74,7 +72,7 @@ void initSkipLibraries ()
 
 const char *instLibrary = "libUnTracerDyninst.so";
 
-static const char *OPT_STR = "M:N:X:Ll:r:A:O:f:T:DEI:V";
+static const char *OPT_STR = "M:N:X:Ll:r:A:O:F:T:DEI:V";
 static const char *USAGE = " [input_binary] [analysis_options] [inst_options]\n \
 	Analysis options:\n \
 		-M: minimum block size (default: 1)\n \
@@ -86,11 +84,8 @@ static const char *USAGE = " [input_binary] [analysis_options] [inst_options]\n 
 		-A: output list for all blocks analyzed\n \
 	Instrumentation options:\n \
 		-O: output instrumented binary\n \
-		-F: use forkserver\n \
-		-f: forkserver address (required for stripped binaries)\n\
+		-F: forkserver address (required for stripped binaries)\n\
 		-T: trace to file path\n \
-		-S: trace to SHM\n \
-		-H: use trace hashmap\n \
 		-D: attempt fixing Dyninst register bug\n \
 		-E: call exit() after hitting <main>\n \
 		-I: output list for all blocks instrumented\n \
@@ -126,7 +121,7 @@ bool parseOptions(int argc, char **argv){
 			case 'O':
 				outputBinary = optarg;
 				break;	
-			case 'f':	
+			case 'F':	
 				entryPoint = strtoul(optarg, NULL, 16);;
 				break;
 			case 'T':
