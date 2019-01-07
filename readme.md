@@ -76,7 +76,7 @@ $ make clean all
 Instrumenting in forkserver-only mode...
 ```
 
-We provide a set of fuzzing-ready benchmarks available here: [https://github.com/FoRTE-Research/FoRTE-FuzzBench](https://github.com/FoRTE-Research/FoRTE-FuzzBench).
+We provide a set of **fuzzing-ready benchmarks** available here: [https://github.com/FoRTE-Research/FoRTE-FuzzBench](https://github.com/FoRTE-Research/FoRTE-FuzzBench).
 
 Then, run `untracer-afl` as follows:
 ```
