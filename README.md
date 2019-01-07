@@ -5,7 +5,7 @@ In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver exe
 
 <table>
   <tr>
-    <td colspan="2"><p ALIGN=CENTER><b>Presented in our paper</b> <a href="https://arxiv.org/abs/1812.11875"><i>Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing</i></a><br>(to appear in the 2019 IEEE Symposium on Security and Privacy).</p></td>
+    <td colspan="2"><div><p align=center><b>Presented in our paper</b> <a href="https://arxiv.org/abs/1812.11875"><i>Full-speed Fuzzing: Reducing Fuzzing Overhead through Coverage-guided Tracing</i></a><br>(to appear in the 2019 IEEE Symposium on Security and Privacy).</p></td>
   </tr>
   <tr>
     <td><b>Citing this repository:</b></td>
