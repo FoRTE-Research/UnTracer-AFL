@@ -1,3 +1,9 @@
+|             |                |
+|-------------|----------------|
+|**AUTHOR:**  | Stefan Nagy  |
+|**EMAIL:**   | snagy2@vt.edu |
+|**LICENSE:** | [MIT License](LICENSE) |
+|**DISCLAIMER:**   | This software is strictly a research prototype. |
 
 # UnTracer-AFL
 
@@ -19,14 +25,6 @@ In UnTracer, both the oracle and tracer utilize the AFL-inspired [forkserver exe
   year = {2019},
 }
 ```
-
-|             |                |
-|-------------|----------------|
-|**AUTHOR:**  | Stefan Nagy  |
-|**EMAIL:**   | snagy2@vt.edu |
-|**LICENSE:** | [MIT License](LICENSE) |
-|**DISCLAIMER:**   | This software is strictly a research prototype. |
-
 
 ## INSTALLATION
 #### 1. Download and build Dyninst (we recommend v9.3.2)
