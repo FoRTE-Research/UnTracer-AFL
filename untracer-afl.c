@@ -3104,6 +3104,7 @@ static u8 save_if_interesting(void* mem, u32 len, u8 fault) {
 
       // Stop the crash oracle, modify it, and restart it
       stop_forkserver(&crash_oracle_fsrv_PID, &crash_oracle_fsrv_ctlFD, &crash_oracle_fsrv_stFD);
+      unmodify_oracle(crash_oracle_path, crash_oracle_cov);
       start_forkserver(&crash_oracle_fsrv_PID, &crash_oracle_fsrv_ctlFD, &crash_oracle_fsrv_stFD, FORKSRV_FD, crash_oracle_argv);  
       if (!unique_crashes) write_crash_readme();
 
