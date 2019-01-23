@@ -52,8 +52,8 @@ git clone https://github.com/FoRTE-Research/UnTracer-AFL
 
 #### 3. Configure environment variables
 ```
-export DYNINST_INSTALL=''
-export UNTRACER_AFL_PATH=''
+export DYNINST_INSTALL=/path/to/dynBuildDir
+export UNTRACER_AFL_PATH=/path/to/Untracer-AFL
 
 export DYNINSTAPI_RT_LIB=$DYNINST_INSTALL/lib/libdyninstAPI_RT.so
 export LD_LIBRARY_PATH=$DYNINST_INSTALL/lib:$UNTRACER_AFL_PATH
