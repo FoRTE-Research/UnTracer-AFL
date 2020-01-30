@@ -55,7 +55,7 @@ static u8   be_quiet,               /* Quiet mode                        */
 
 static void find_as(u8* argv0) {
 
-  u8 *afl_path = getenv("UNTRACER-AFL_PATH");
+  u8 *afl_path = getenv("UNTRACER_AFL_PATH");
   u8 *slash, *tmp;
 
   if (afl_path) {
