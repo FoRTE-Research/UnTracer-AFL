@@ -145,7 +145,7 @@ static void edit_params(u32 argc, char** argv) {
 
 #ifdef __APPLE__
 
-    if (!strcmp(name, "afl-g++")) cc_params[0] = getenv("AFL_CXX");
+    if (!strcmp(name, "untracer-g++")) cc_params[0] = getenv("AFL_CXX");
     else if (!strcmp(name, "afl-gcj")) cc_params[0] = getenv("AFL_GCJ");
     else cc_params[0] = getenv("AFL_CC");
 
@@ -162,7 +162,7 @@ static void edit_params(u32 argc, char** argv) {
 
 #else
 
-    if (!strcmp(name, "afl-g++")) {
+    if (!strcmp(name, "untracer-g++")) {
       u8* alt_cxx = getenv("AFL_CXX");
       cc_params[0] = alt_cxx ? alt_cxx : (u8*)"g++";
     } else if (!strcmp(name, "afl-gcj")) {
