@@ -21,7 +21,7 @@
 
 # UnTracer vars - edit DYN_ROOT accordingly
 
-DYN_ROOT 	= /home/osboxes/fuzzing/dynBuildDir
+DYN_ROOT 	= /home/osboxes/dynBuildDir
 CC 			= gcc 
 CXX 		= g++
 CXXFLAGS 	= -g -Wall -O3 -std=c++11
