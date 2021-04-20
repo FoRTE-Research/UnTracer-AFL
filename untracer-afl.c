@@ -521,7 +521,7 @@ void setup_tracer(){
   if (fread(data, 1, target_size, tracer_file) != target_size)
     PFATAL("Unable to read file '%s'", tracer_path);
 
-  offset = (char *) memmem(data, target_size, "\x90\x90\x90", strlen("\x90\x90\x90"+1)) - data;
+  offset = (char *) memmem(data, target_size, "\x90\x90\x90", strlen("\x90\x90\x90")) - data;
 
   /* Replace the first 5 bytes after the nop. */
 
