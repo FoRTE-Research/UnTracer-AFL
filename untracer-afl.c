@@ -560,6 +560,9 @@ void setup_block_array(){
   char * tmp2;
 
   FILE * bb_lst_file = fopen(bbmap_path, "r");
+  if (!bb_lst_file){
+    PFATAL("Missing basic block map: '%s'!", bbmap_path);
+  }
 
   while (fgets(tmp1, sizeof(tmp1), bb_lst_file)) {
 
