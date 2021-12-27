@@ -1,4 +1,7 @@
 # UnTracer-AFL
+
+* **Update (12/27/2021): Check out our new fast binary fuzzer HeXcite here: https://github.com/FoRTE-Research/HeXcite.**  
+
 This repository contains an implementation of our prototype coverage-guided tracing framework **UnTracer** in the popular coverage-guided fuzzer [AFL](http://lcamtuf.coredump.cx/afl). Coverage-guided tracing employs two versions of the target binary: (1) a forkserver-only `oracle` binary modified with basic block-level software interrupts on unseen basic blocks for quickly identifying coverage-increasing testcases and (2) a fully-instrumented `tracer` binary for tracing the coverage of all coverage-increasing testcases. 
 
 In UnTracer, both the oracle and tracer binaries use the AFL-inspired [forkserver execution model](http://lcamtuf.blogspot.com/2014/10/fuzzing-binaries-without-execve.html). For `oracle` instrumentation we require all target binaries be compiled with `untracer-cc` -- our "forkserver-only" modification of AFL's assembly-time instrumenter `afl-cc`. For `tracer` binary instrumentation we utilize [Dyninst](http://www.dyninst.org/) with much of our code based-off [AFL-Dyninst](https://github.com/vanhauser-thc/afl-dyninst). We plan to incorporate a purely binary-only ("black-box") instrumentation approach in the near future. Our current implementation of UnTracer supports **basic block coverage**. 
