@@ -22,7 +22,7 @@ In UnTracer, both the oracle and tracer binaries use the AFL-inspired [forkserve
   </tr>
   <tr>
     <td><b>Developers:</b></td>
-    <td>Stefan Nagy (<a href="mailto:snagy2@vt.edu">snagy2@vt.edu</a>) and Matthew Hicks (<a href="mailto:mdhicks2@vt.edu">mdhicks2@vt.edu</a>)</td>
+    <td>Stefan Nagy (<a href="mailto:snagy@cs.utah.edu">snagy@cs.utah.edu</a>) and Matthew Hicks (<a href="mailto:mdhicks2@vt.edu">mdhicks2@vt.edu</a>)</td>
   </tr>
   <tr>
     <td><b>License:</b></td>
